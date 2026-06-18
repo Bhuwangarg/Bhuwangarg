@@ -1,0 +1,27 @@
+{
+  "name": "aegis-agent-auth",
+  "version": "0.1.0",
+  "description": "Aegis — the trust layer for the agentic web. Give your agent a key, not your keys.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "demo": "node demo/run.js",
+    "issuer": "node apps/issuer/server.js",
+    "merchant": "node apps/merchant/server.js",
+    "agent": "node apps/agent/run-agent.js",
+    "live": "node demo/live.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "ai-agents",
+    "authentication",
+    "authorization",
+    "delegation",
+    "verifiable-credentials",
+    "agentic-commerce",
+    "ed25519"
+  ]
+}

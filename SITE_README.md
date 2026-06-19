@@ -76,6 +76,22 @@ simply keeps its generative fallback — nothing breaks.
 > Google free tiers don't include image generation), and the site will keep its
 > generative art until a funded key is used.
 
+### No API key? Render images locally (free)
+
+The repo ships with a set of art-directed images in `assets/img/` that were
+generated **offline, with no paid model**, by `scripts/render-art.mjs`. It draws
+each garment + lookbook shot as a studio composition in SVG and rasterizes it
+with a headless Chromium. To regenerate or tweak them:
+
+```bash
+npm i -D playwright-core && npx playwright install chromium
+node scripts/render-art.mjs           # writes assets/img/*.jpg
+```
+
+Edit the garment paths / colors in that file to restyle. When you later add a
+billing-enabled OpenAI or Gemini key, `generate-images.mjs` will overwrite these
+with photoreal versions.
+
 ## Deploy (GitHub Pages)
 
 Repo Settings → Pages → Source: `main` (or this branch), root. Done.

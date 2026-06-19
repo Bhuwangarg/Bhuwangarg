@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 /**
- * VANTA — image generator (Google Gemini / Imagen)
+ * VANTA — image generator (OpenAI  or  Google Gemini / Imagen)
  * ------------------------------------------------------------------
  * Generates the product + lookbook imagery the website expects in
  * assets/img/. The site works WITHOUT this (it falls back to built-in
  * generative SVG art), but run this to drop in real photoreal images.
  *
- * USAGE:
- *   export GEMINI_API_KEY="your_key_here"      # from aistudio.google.com
+ * USAGE — pick ONE provider by exporting its key, then run:
+ *   export OPENAI_API_KEY="sk-..."        # uses gpt-image-1   (platform.openai.com)
+ *   #  or
+ *   export GEMINI_API_KEY="..."           # uses Imagen/Gemini (aistudio.google.com)
  *   node scripts/generate-images.mjs
  *
- * It writes: assets/img/{hoodie,tee,pant,jacket,look1..look4}.jpg
+ * If both keys are set, OpenAI is used. It writes:
+ *   assets/img/{hoodie,tee,pant,jacket,look1..look4}.jpg
  *
- * Model: imagen-3.0-generate-002 via the Generative Language API.
  * No external npm dependencies — uses Node 18+ global fetch.
  * ------------------------------------------------------------------
  */
@@ -24,9 +26,17 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(__dirname, '..', 'assets', 'img');
 
-const API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-const MODEL = process.env.IMAGEN_MODEL || 'imagen-3.0-generate-002';
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:predict`;
+// --- Provider selection: OpenAI wins if its key is present, else Gemini. ---
+const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+const PROVIDER = OPENAI_KEY ? 'openai' : (GEMINI_KEY ? 'gemini' : null);
+
+// OpenAI
+const OPENAI_MODEL = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1';
+// Google
+const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const IMAGEN_MODEL = process.env.IMAGEN_MODEL || 'imagen-4.0-generate-001';
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
 
 // Shared style so every image reads as one coherent brand world.
 const STYLE =
@@ -46,8 +56,24 @@ const JOBS = [
   { id: 'look4',  prompt: `Motion-blurred shot of a model walking fast in black streetwear, sense of speed, dark alley. ${STYLE}` }
 ];
 
-async function generate(job) {
-  const res = await fetch(`${ENDPOINT}?key=${API_KEY}`, {
+// OpenAI gpt-image-1. Returns base64 or throws with the API message.
+async function viaOpenAI(job) {
+  const size = job.id.startsWith('look') ? '1536x1024' : '1024x1536'; // landscape vs portrait
+  const res = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
+    body: JSON.stringify({ model: OPENAI_MODEL, prompt: job.prompt, n: 1, size, quality: 'high' })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`${res.status} ${data?.error?.message || ''}`.trim());
+  const b64 = data?.data?.[0]?.b64_json;
+  if (!b64) throw new Error('no image in OpenAI response');
+  return b64;
+}
+
+// Try Imagen (predict). Returns base64 or throws with the API message.
+async function viaImagen(job) {
+  const res = await fetch(`${BASE}/${IMAGEN_MODEL}:predict?key=${API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -55,29 +81,61 @@ async function generate(job) {
       parameters: { sampleCount: 1, aspectRatio: job.id.startsWith('look') ? '4:3' : '3:4' }
     })
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status} for "${job.id}": ${text.slice(0, 300)}`);
-  }
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`${res.status} ${data?.error?.message || ''}`.trim());
   const b64 = data?.predictions?.[0]?.bytesBase64Encoded;
-  if (!b64) throw new Error(`No image data returned for "${job.id}". Response: ${JSON.stringify(data).slice(0, 200)}`);
+  if (!b64) throw new Error('no image in Imagen response');
+  return b64;
+}
+
+// Try the Gemini image model (generateContent). Returns base64 or throws.
+async function viaGemini(job) {
+  const res = await fetch(`${BASE}/${GEMINI_IMAGE_MODEL}:generateContent?key=${API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: job.prompt }] }],
+      generationConfig: { responseModalities: ['IMAGE'] }
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`${res.status} ${data?.error?.message || ''}`.trim());
+  const parts = data?.candidates?.[0]?.content?.parts || [];
+  const img = parts.find(p => p.inlineData?.data);
+  if (!img) throw new Error('no image in Gemini response');
+  return img.inlineData.data;
+}
+
+async function generate(job) {
+  let b64, source;
+  if (PROVIDER === 'openai') {
+    b64 = await viaOpenAI(job); source = OPENAI_MODEL;
+  } else {
+    try { b64 = await viaImagen(job); source = IMAGEN_MODEL; }
+    catch (e1) {
+      try { b64 = await viaGemini(job); source = GEMINI_IMAGE_MODEL; }
+      catch (e2) { throw new Error(`Imagen[${e1.message}] / Gemini[${e2.message}]`); }
+    }
+  }
   const buf = Buffer.from(b64, 'base64');
   const out = resolve(OUT_DIR, `${job.id}.jpg`);
   await writeFile(out, buf);
-  console.log(`  ✓ ${job.id}.jpg  (${(buf.length / 1024).toFixed(0)} KB)`);
+  console.log(`  ✓ ${job.id}.jpg  (${(buf.length / 1024).toFixed(0)} KB · ${source})`);
 }
 
 async function main() {
-  if (!API_KEY) {
-    console.error('\n✗ No API key found. Set GEMINI_API_KEY (or GOOGLE_API_KEY) and re-run.');
-    console.error('  Get one free at https://aistudio.google.com/app/apikey\n');
+  if (!PROVIDER) {
+    console.error('\n✗ No API key found. Set ONE of these and re-run:');
+    console.error('    export OPENAI_API_KEY="sk-..."   # platform.openai.com/api-keys');
+    console.error('    export GEMINI_API_KEY="..."      # aistudio.google.com/app/apikey\n');
     console.error('  The website still works without images — it uses built-in generative art.\n');
     process.exit(1);
   }
   await mkdir(OUT_DIR, { recursive: true });
-  console.log(`\nVANTA · generating ${JOBS.length} images with ${MODEL}\n`);
+  const using = PROVIDER === 'openai'
+    ? OPENAI_MODEL
+    : `${IMAGEN_MODEL}, falling back to ${GEMINI_IMAGE_MODEL}`;
+  console.log(`\nVANTA · generating ${JOBS.length} images via ${PROVIDER} (${using})\n`);
   let ok = 0;
   for (const job of JOBS) {
     try { await generate(job); ok++; }

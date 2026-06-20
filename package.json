@@ -1,0 +1,27 @@
+{
+  "name": "bus-challan-checker",
+  "version": "1.0.0",
+  "description": "Automatic e-challan checker for a personal bus fleet. Fetches challans per bus, aggregates monthly totals, and exposes a REST API + dashboard.",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "challan",
+    "echallan",
+    "parivahan",
+    "bus",
+    "fleet",
+    "traffic-fine",
+    "api"
+  ],
+  "author": "Bhuwan Garg",
+  "license": "MIT"
+}

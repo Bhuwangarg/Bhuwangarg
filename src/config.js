@@ -46,5 +46,15 @@ export const config = {
     vehicleField: process.env.CHALLAN_API_VEHICLE_FIELD || 'vehicle_number',
     auth: (process.env.CHALLAN_API_AUTH || 'x-api-key').toLowerCase(),
   },
+  mastersIndia: {
+    authUrl: process.env.MI_AUTH_URL || 'https://api-platform.mastersindia.co/api/v2/token-auth/',
+    challanUrl:
+      process.env.MI_CHALLAN_URL || 'https://api-platform.mastersindia.co/api/v2/sbt/ECHALLAN/',
+    username: process.env.MI_USERNAME || '',
+    password: process.env.MI_PASSWORD || '',
+    subid: process.env.MI_SUBID || '',
+    productId: process.env.MI_PRODUCTID || 'arap',
+    mode: process.env.MI_MODE || 'Buyer',
+  },
   dataFile: path.join(rootDir, 'data', 'store.json'),
 };

@@ -46,6 +46,16 @@ export const config = {
     vehicleField: process.env.CHALLAN_API_VEHICLE_FIELD || 'vehicle_number',
     auth: (process.env.CHALLAN_API_AUTH || 'x-api-key').toLowerCase(),
   },
+  instantPay: {
+    url: process.env.INSTANTPAY_URL || 'https://api.instantpay.in/identity/vehicleChallan',
+    clientId: process.env.INSTANTPAY_CLIENT_ID || '',
+    clientSecret: process.env.INSTANTPAY_CLIENT_SECRET || '',
+    authCode: process.env.INSTANTPAY_AUTH_CODE || '1',
+    endpointIp: process.env.INSTANTPAY_ENDPOINT_IP || '127.0.0.1',
+    latitude: process.env.INSTANTPAY_LATITUDE || '0',
+    longitude: process.env.INSTANTPAY_LONGITUDE || '0',
+    consent: process.env.INSTANTPAY_CONSENT || 'Y',
+  },
   mastersIndia: {
     authUrl: process.env.MI_AUTH_URL || 'https://api-platform.mastersindia.co/api/v2/token-auth/',
     challanUrl:

@@ -34,6 +34,52 @@ export function Field({
   );
 }
 
+export function LocationRow({
+  label,
+  id,
+  value,
+  onChange,
+  placeholder,
+  onRemove,
+}: {
+  label: string;
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  onRemove?: () => void;
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-1.5 flex items-baseline justify-between gap-2"
+      >
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            className={`rounded text-xs font-medium text-muted transition hover:text-[var(--danger)] ${focusRing}`}
+            aria-label={`Remove ${label}`}
+          >
+            Remove
+          </button>
+        )}
+      </label>
+      <input
+        id={id}
+        type="text"
+        autoComplete="off"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputClass}
+      />
+    </div>
+  );
+}
+
 export function NumberInput({
   id,
   value,

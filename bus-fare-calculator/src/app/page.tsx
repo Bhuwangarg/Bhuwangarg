@@ -1,34 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { computeFare, formatINR, formatKm, formatRate } from "@/lib/fare";
 import {
   Field,
   Footer,
   Header,
   LineItem,
+  LocationRow,
   NumberInput,
   focusRing,
-  inputClass,
 } from "./ui";
-import { CheckIcon, CopyIcon, PrintIcon, RouteIcon, Spinner } from "./icons";
+import {
+  CheckIcon,
+  CopyIcon,
+  PlusIcon,
+  PrintIcon,
+  RouteIcon,
+  Spinner,
+} from "./icons";
 
 type DistanceStatus =
   | { state: "idle" }
   | { state: "loading" }
-  | { state: "ok"; from: string; to: string }
+  | { state: "ok" }
   | { state: "error"; message: string };
 
 type CopyStatus = "idle" | "ok" | "error";
 
+type Stop = { id: number; value: string };
+
+// A trip can pass through several stops, so keep the intermediate points as
+// their own ordered list between the start and the destination.
+const MAX_STOPS = 10;
+
 export default function Home() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [stops, setStops] = useState<Stop[]>([]);
   const [distanceKm, setDistanceKm] = useState("");
   const [ratePerKm, setRatePerKm] = useState("");
   const [toll, setToll] = useState("");
   const [distance, setDistance] = useState<DistanceStatus>({ state: "idle" });
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  const nextStopId = useRef(0);
 
   const fare = useMemo(
     () =>
@@ -42,28 +57,45 @@ export default function Home() {
 
   const hasQuote = fare.distanceKm > 0 && fare.ratePerKm > 0;
 
+  // The trip in order: start, any stops, destination — trimmed, no blanks.
+  const routePlaces = [from, ...stops.map((s) => s.value), to]
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const routeLabel = routePlaces.join(" → ");
+
   // Editing the route invalidates any previously auto-filled distance banner,
   // so we drop back to the idle state (the number stays, still editable).
   function clearDistanceBanner() {
     setDistance((d) => (d.state === "idle" ? d : { state: "idle" }));
   }
 
+  function addStop() {
+    setStops((s) => [...s, { id: nextStopId.current++, value: "" }]);
+    clearDistanceBanner();
+  }
+  function updateStop(id: number, value: string) {
+    setStops((s) => s.map((st) => (st.id === id ? { ...st, value } : st)));
+    clearDistanceBanner();
+  }
+  function removeStop(id: number) {
+    setStops((s) => s.filter((st) => st.id !== id));
+    clearDistanceBanner();
+  }
+
   async function fetchDistance() {
-    if (!from.trim() || !to.trim()) {
+    if (routePlaces.length < 2) {
       setDistance({
         state: "error",
-        message: "Enter both the starting point and the destination first.",
+        message: "Enter at least a starting point and a destination first.",
       });
       return;
     }
     setDistance({ state: "loading" });
     setCopyStatus("idle");
     try {
-      const res = await fetch(
-        `/api/distance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(
-          to,
-        )}`,
-      );
+      const params = new URLSearchParams();
+      routePlaces.forEach((p) => params.append("points", p));
+      const res = await fetch(`/api/distance?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {
         setDistance({
@@ -73,7 +105,7 @@ export default function Home() {
         return;
       }
       setDistanceKm(String(data.distanceKm));
-      setDistance({ state: "ok", from: data.from, to: data.to });
+      setDistance({ state: "ok" });
     } catch {
       setDistance({
         state: "error",
@@ -86,6 +118,7 @@ export default function Home() {
   function resetAll() {
     setFrom("");
     setTo("");
+    setStops([]);
     setDistanceKm("");
     setRatePerKm("");
     setToll("");
@@ -95,7 +128,7 @@ export default function Home() {
 
   async function copyQuote() {
     const routeLine =
-      from.trim() && to.trim() ? `Route: ${from.trim()} → ${to.trim()}\n` : "";
+      routePlaces.length >= 2 ? `Route: ${routePlaces.join(" → ")}\n` : "";
     const text =
       `Bus trip quote\n` +
       routeLine +
@@ -133,39 +166,52 @@ export default function Home() {
                 fetchDistance();
               }}
             >
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field label="From" htmlFor="from">
-                  <input
-                    id="from"
-                    type="text"
-                    inputMode="text"
-                    autoComplete="off"
-                    placeholder="e.g. Jaipur"
-                    value={from}
-                    onChange={(e) => {
-                      setFrom(e.target.value);
-                      clearDistanceBanner();
-                    }}
-                    className={inputClass}
+              <div className="mt-4 space-y-3">
+                <LocationRow
+                  label="From"
+                  id="from"
+                  value={from}
+                  placeholder="e.g. Jaipur"
+                  onChange={(v) => {
+                    setFrom(v);
+                    clearDistanceBanner();
+                  }}
+                />
+
+                {stops.map((s, i) => (
+                  <LocationRow
+                    key={s.id}
+                    label={`Stop ${i + 1}`}
+                    id={`stop-${s.id}`}
+                    value={s.value}
+                    placeholder="e.g. Ajmer"
+                    onChange={(v) => updateStop(s.id, v)}
+                    onRemove={() => removeStop(s.id)}
                   />
-                </Field>
-                <Field label="To" htmlFor="to">
-                  <input
-                    id="to"
-                    type="text"
-                    autoComplete="off"
-                    placeholder="e.g. Udaipur"
-                    value={to}
-                    onChange={(e) => {
-                      setTo(e.target.value);
-                      clearDistanceBanner();
-                    }}
-                    className={inputClass}
-                  />
-                </Field>
+                ))}
+
+                <LocationRow
+                  label="To"
+                  id="to"
+                  value={to}
+                  placeholder="e.g. Udaipur"
+                  onChange={(v) => {
+                    setTo(v);
+                    clearDistanceBanner();
+                  }}
+                />
               </div>
 
-              <div className="mt-3">
+              <button
+                type="button"
+                onClick={addStop}
+                disabled={stops.length >= MAX_STOPS}
+                className={`mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 text-sm font-medium text-muted transition hover:border-primary/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+              >
+                <PlusIcon /> Add stop
+              </button>
+
+              <div className="mt-4">
                 <button
                   type="submit"
                   aria-busy={distance.state === "loading"}
@@ -195,8 +241,8 @@ export default function Home() {
                   )}
                   {distance.state === "ok" && (
                     <p className="text-xs text-[var(--success-text)]">
-                      Road distance filled in from the map. You can edit it
-                      below.
+                      Total road distance through your route filled in. You can
+                      edit it below.
                     </p>
                   )}
                   {distance.state === "error" && (
@@ -212,7 +258,7 @@ export default function Home() {
               <Field
                 label="Distance"
                 htmlFor="distance"
-                hint="kilometres — auto-filled or type it"
+                hint="total km — auto-filled or type it"
               >
                 <NumberInput
                   id="distance"
@@ -260,13 +306,13 @@ export default function Home() {
 
           {/* ---- Quote ---- */}
           <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7 lg:sticky lg:top-8">
-            <div className="flex items-center justify-between">
+            <div className="flex items-start justify-between gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Fare quote
               </h2>
-              {(from.trim() || to.trim()) && (
-                <span className="max-w-[55%] truncate text-right text-sm font-medium text-foreground">
-                  {from.trim() || "—"} → {to.trim() || "—"}
+              {routeLabel && (
+                <span className="max-w-[60%] truncate text-right text-sm font-medium text-foreground">
+                  {routeLabel}
                 </span>
               )}
             </div>

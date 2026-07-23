@@ -5,7 +5,8 @@ import { NextResponse } from "next/server";
 //
 // Pipeline:
 //   1. Geocode each place name -> lat/lon via OpenStreetMap Nominatim.
-//   2. Ask OSRM for the driving route between the two points.
+//   2. Ask OSRM for one driving route through all points, in order, and sum
+//      the legs (a trip may pass through several stops).
 // No API keys are needed. The distance is always editable in the UI, so this
 // is a convenience helper, not a hard dependency.
 
@@ -22,6 +23,8 @@ const USER_AGENT =
 // Reject absurdly long inputs so a hostile caller can't inflate outbound
 // requests to the free OSM services.
 const MAX_QUERY_LEN = 120;
+// Cap the number of waypoints per request for the same reason.
+const MAX_POINTS = 12;
 
 // Small in-memory cache so repeat/abusive queries don't re-hit the free OSM
 // services (which rate-limit and ban abusers). Best-effort: on serverless it
@@ -89,8 +92,9 @@ async function geocode(place: string): Promise<GeoPoint | null> {
   return point;
 }
 
-async function roadDistanceKm(a: GeoPoint, b: GeoPoint): Promise<number | null> {
-  const coords = `${a.lon},${a.lat};${b.lon},${b.lat}`;
+// Total driving distance through every point in order (start, any stops, end).
+async function roadDistanceKm(points: GeoPoint[]): Promise<number | null> {
+  const coords = points.map((p) => `${p.lon},${p.lat}`).join(";");
   const cacheKey = `route:${coords}`;
   const cached = cacheGet<number>(cacheKey);
   if (cached !== undefined) return cached;
@@ -119,17 +123,32 @@ async function roadDistanceKm(a: GeoPoint, b: GeoPoint): Promise<number | null> 
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const from = (searchParams.get("from") ?? "").trim();
-  const to = (searchParams.get("to") ?? "").trim();
 
-  if (!from || !to) {
+  // Ordered list of places: start, any intermediate stops, then destination.
+  // Falls back to the older from/to params so existing links keep working.
+  let places = searchParams.getAll("points").map((p) => p.trim());
+  if (places.length === 0) {
+    const from = (searchParams.get("from") ?? "").trim();
+    const to = (searchParams.get("to") ?? "").trim();
+    places = [from, to];
+  }
+  places = places.filter(Boolean);
+
+  if (places.length < 2) {
     return NextResponse.json(
-      { error: "Please provide both 'from' and 'to' locations." },
+      { error: "Provide at least a starting point and a destination." },
       { status: 400 },
     );
   }
 
-  if (from.length > MAX_QUERY_LEN || to.length > MAX_QUERY_LEN) {
+  if (places.length > MAX_POINTS) {
+    return NextResponse.json(
+      { error: `Too many stops — ${MAX_POINTS} points maximum.` },
+      { status: 400 },
+    );
+  }
+
+  if (places.some((p) => p.length > MAX_QUERY_LEN)) {
     return NextResponse.json(
       { error: "Location names are too long. Use shorter place names." },
       { status: 400 },
@@ -138,30 +157,26 @@ export async function GET(request: Request) {
 
   try {
     // Sequential, not Promise.all: Nominatim's usage policy allows only ~1
-    // request/second, so firing both at once risks a 429 that surfaces as a
+    // request/second, so firing them at once risks a 429 that surfaces as a
     // misleading "location not found".
-    const origin = await geocode(from);
-    const destination = await geocode(to);
-
-    if (!origin) {
-      return NextResponse.json(
-        { error: `Could not find the location "${from}".` },
-        { status: 404 },
-      );
-    }
-    if (!destination) {
-      return NextResponse.json(
-        { error: `Could not find the location "${to}".` },
-        { status: 404 },
-      );
+    const geocoded: GeoPoint[] = [];
+    for (const place of places) {
+      const point = await geocode(place);
+      if (!point) {
+        return NextResponse.json(
+          { error: `Could not find the location "${place}".` },
+          { status: 404 },
+        );
+      }
+      geocoded.push(point);
     }
 
-    const distanceKm = await roadDistanceKm(origin, destination);
+    const distanceKm = await roadDistanceKm(geocoded);
     if (distanceKm === null) {
       return NextResponse.json(
         {
           error:
-            "Found both places but couldn't calculate a road route. Enter the distance manually.",
+            "Found the places but couldn't calculate a road route through them. Enter the distance manually.",
         },
         { status: 502 },
       );
@@ -169,8 +184,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       distanceKm,
-      from: origin.label,
-      to: destination.label,
+      points: geocoded.map((p) => p.label),
+      from: geocoded[0].label,
+      to: geocoded[geocoded.length - 1].label,
     });
   } catch {
     return NextResponse.json(

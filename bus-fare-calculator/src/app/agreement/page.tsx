@@ -81,7 +81,11 @@ export default function AgreementPage() {
         ? `${hi ? HI_LABELS.route : "Route"}: ${data.pickupCity || "?"} -> ${data.dropCity || "?"}`
         : "",
       data.finalAmount
-        ? `${hi ? HI_LABELS.totalFare : "Total fare"}: Rs. ${data.finalAmount}`
+        ? `${hi ? HI_LABELS.totalFare : "Total fare"}: Rs. ${
+            Number.isFinite(Number(data.finalAmount))
+              ? Number(data.finalAmount).toLocaleString("en-IN")
+              : data.finalAmount
+          }`
         : "",
     ]
       .filter(Boolean)

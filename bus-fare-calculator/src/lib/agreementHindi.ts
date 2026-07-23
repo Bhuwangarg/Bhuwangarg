@@ -22,6 +22,54 @@ export const HI_LABELS: Record<string, string> = {
   totalFare: "कुल किराया",
 };
 
+// Hindi cardinal numbers 0-99 (each form is irregular, so a full table is the
+// only reliable way). Index 0 is empty; "shunya" is only used at the top level.
+const HI_ONES = [
+  "", "एक", "दो", "तीन", "चार", "पाँच", "छह", "सात", "आठ", "नौ", "दस",
+  "ग्यारह", "बारह", "तेरह", "चौदह", "पंद्रह", "सोलह", "सत्रह", "अठारह", "उन्नीस", "बीस",
+  "इक्कीस", "बाईस", "तेईस", "चौबीस", "पच्चीस", "छब्बीस", "सत्ताईस", "अट्ठाईस", "उनतीस", "तीस",
+  "इकतीस", "बत्तीस", "तैंतीस", "चौंतीस", "पैंतीस", "छत्तीस", "सैंतीस", "अड़तीस", "उनतालीस", "चालीस",
+  "इकतालीस", "बयालीस", "तैंतालीस", "चौवालीस", "पैंतालीस", "छियालीस", "सैंतालीस", "अड़तालीस", "उनचास", "पचास",
+  "इक्यावन", "बावन", "तिरेपन", "चौवन", "पचपन", "छप्पन", "सत्तावन", "अट्ठावन", "उनसठ", "साठ",
+  "इकसठ", "बासठ", "तिरेसठ", "चौंसठ", "पैंसठ", "छियासठ", "सड़सठ", "अड़सठ", "उनहत्तर", "सत्तर",
+  "इकहत्तर", "बहत्तर", "तिहत्तर", "चौहत्तर", "पचहत्तर", "छिहत्तर", "सतहत्तर", "अठहत्तर", "उन्यासी", "अस्सी",
+  "इक्यासी", "बयासी", "तिरासी", "चौरासी", "पचासी", "छियासी", "सत्तासी", "अट्ठासी", "नवासी", "नब्बे",
+  "इक्यानवे", "बानवे", "तिरानवे", "चौरानवे", "पचानवे", "छियानवे", "सत्तानवे", "अट्ठानवे", "निन्यानवे",
+];
+
+function hiThreeDigits(n: number): string {
+  const h = Math.floor(n / 100);
+  const r = n % 100;
+  let s = "";
+  if (h) s += HI_ONES[h] + " सौ" + (r ? " " : "");
+  if (r) s += HI_ONES[r];
+  return s;
+}
+
+// Indian-system number to Hindi words, e.g. 425040 -> "चार लाख पच्चीस हज़ार चालीस".
+function hiWords(num: number): string {
+  if (num === 0) return "शून्य";
+  const crore = Math.floor(num / 10000000);
+  num %= 10000000;
+  const lakh = Math.floor(num / 100000);
+  num %= 100000;
+  const thousand = Math.floor(num / 1000);
+  num %= 1000;
+  const parts: string[] = [];
+  if (crore) parts.push(hiThreeDigits(crore) + " करोड़");
+  if (lakh) parts.push(HI_ONES[lakh] + " लाख");
+  if (thousand) parts.push(HI_ONES[thousand] + " हज़ार");
+  if (num) parts.push(hiThreeDigits(num));
+  return parts.join(" ").trim();
+}
+
+/** Rupee amount in Hindi words, e.g. "11000" -> "ग्यारह हज़ार रुपये मात्र". */
+export function amountInWordsHi(value: string | number): string {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n <= 0) return "";
+  return hiWords(n) + " रुपये मात्र";
+}
+
 export function buildHindiAgreement(v: Vals): AgreementDoc {
   const company = {
     name: "महालक्ष्मी ट्रेवल्स",

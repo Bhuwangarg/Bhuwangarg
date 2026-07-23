@@ -5,7 +5,7 @@
 // the Hindi or English template and returns a structured document that the UI
 // renders and prints.
 
-import { HI_LABELS, buildHindiAgreement } from "./agreementHindi";
+import { HI_LABELS, amountInWordsHi, buildHindiAgreement } from "./agreementHindi";
 
 export type Lang = "hi" | "en";
 
@@ -207,6 +207,9 @@ function fill(v: string): string {
 }
 
 export function buildAgreement(data: AgreementData, lang: Lang): AgreementDoc {
+  // Amount-in-words must match the document language, so a Hindi agreement
+  // reads "ग्यारह हज़ार रुपये मात्र" rather than "Eleven Thousand Rupees Only".
+  const words = lang === "hi" ? amountInWordsHi : amountInWords;
   const vals: Vals = {
     tripType: fill(labelOf(TRIP_TYPES, data.tripType, lang)),
     busType: fill(labelOf(BUS_TYPES, data.busType, lang)),
@@ -217,11 +220,11 @@ export function buildAgreement(data: AgreementData, lang: Lang): AgreementDoc {
     mobile: fill(data.mobile),
     advanceDate: fill(formatAgreementDate(data.advanceDate)),
     signAmount: fill(data.signAmount),
-    signWords: fill(amountInWords(data.signAmount)),
+    signWords: fill(words(data.signAmount)),
     ratePerKm: fill(data.ratePerKm),
-    rateWords: fill(amountInWords(data.ratePerKm)),
+    rateWords: fill(words(data.ratePerKm)),
     finalAmount: fill(data.finalAmount),
-    finalWords: fill(amountInWords(data.finalAmount)),
+    finalWords: fill(words(data.finalAmount)),
     pickupCity: fill(data.pickupCity),
     dropCity: fill(data.dropCity),
     fromDate: fill(formatAgreementDate(data.fromDate)),

@@ -23,6 +23,7 @@ import {
   Spinner,
 } from "./icons";
 import Link from "next/link";
+import { HI_LABELS } from "@/lib/agreementHindi";
 
 type DistanceStatus =
   | { state: "idle" }
@@ -588,8 +589,8 @@ export default function Home() {
               Booking agreement
             </h2>
             <p className="mt-0.5 text-sm text-muted">
-              Generate a printable hire agreement (English or हिन्दी) with the
-              customer&apos;s details.
+              Generate a printable hire agreement (English or {HI_LABELS.hindi})
+              with the customer&apos;s details.
             </p>
           </div>
           <Link

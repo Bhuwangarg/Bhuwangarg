@@ -1,9 +1,11 @@
-// Bus-hire agreement (अनुबंध पत्र) template for Mahalaxmi Travels.
+// Bus-hire agreement (Anubandh Patra) template for Mahalaxmi Travels.
 //
 // The document body is fixed boilerplate; only the customer/trip details
 // change per agreement. `buildAgreement` interpolates the details into either
 // the Hindi or English template and returns a structured document that the UI
 // renders and prints.
+
+import { HI_LABELS, buildHindiAgreement } from "./agreementHindi";
 
 export type Lang = "hi" | "en";
 
@@ -43,11 +45,11 @@ interface Bilingual {
 }
 
 export const TRIP_TYPES: { value: string; label: Bilingual }[] = [
-  { value: "baraat", label: { hi: "बारात", en: "Baraat" } },
-  { value: "yatra", label: { hi: "यात्रा", en: "Journey (Yatra)" } },
-  { value: "tourist", label: { hi: "टूरिस्ट", en: "Tourist" } },
-  { value: "picnic", label: { hi: "पिकनिक", en: "Picnic" } },
-  { value: "reserve", label: { hi: "रिजर्व पार्टी", en: "Reserved Party" } },
+  { value: "baraat", label: { hi: HI_LABELS.baraat, en: "Baraat" } },
+  { value: "yatra", label: { hi: HI_LABELS.yatra, en: "Journey (Yatra)" } },
+  { value: "tourist", label: { hi: HI_LABELS.tourist, en: "Tourist" } },
+  { value: "picnic", label: { hi: HI_LABELS.picnic, en: "Picnic" } },
+  { value: "reserve", label: { hi: HI_LABELS.reserve, en: "Reserved Party" } },
 ];
 
 export const BUS_TYPES: { value: string; label: Bilingual }[] = [
@@ -56,10 +58,10 @@ export const BUS_TYPES: { value: string; label: Bilingual }[] = [
 ];
 
 export const PAYMENT_TYPES: { value: string; label: Bilingual }[] = [
-  { value: "cash", label: { hi: "नकद", en: "Cash" } },
-  { value: "draft", label: { hi: "ड्राफ्ट", en: "Draft" } },
-  { value: "cheque", label: { hi: "चैक", en: "Cheque" } },
-  { value: "epayment", label: { hi: "ई-पेमेन्ट", en: "E-Payment" } },
+  { value: "cash", label: { hi: HI_LABELS.cash, en: "Cash" } },
+  { value: "draft", label: { hi: HI_LABELS.draft, en: "Draft" } },
+  { value: "cheque", label: { hi: HI_LABELS.cheque, en: "Cheque" } },
+  { value: "epayment", label: { hi: HI_LABELS.epayment, en: "E-Payment" } },
 ];
 
 function labelOf(
@@ -151,6 +153,7 @@ export function formatTime12(t: string): string {
 export interface AgreementDoc {
   company: { name: string; regd: string; address: string; phone: string; mobile: string };
   title: string;
+  phoneLabel: string;
   serialLabel: string;
   dateLabel: string;
   serialNo: string;
@@ -163,6 +166,40 @@ export interface AgreementDoc {
   signCompany: string;
 }
 
+// Pre-formatted, display-ready values shared by both language templates.
+export interface Vals {
+  tripType: string;
+  busType: string;
+  payment: string;
+  name: string;
+  fatherName: string;
+  address: string;
+  mobile: string;
+  advanceDate: string;
+  signAmount: string;
+  signWords: string;
+  ratePerKm: string;
+  rateWords: string;
+  finalAmount: string;
+  finalWords: string;
+  pickupCity: string;
+  dropCity: string;
+  fromDate: string;
+  fromTime: string;
+  toDate: string;
+  toTime: string;
+  returnPlace: string;
+  paxCount: string;
+  extraPaxCharge: string;
+  beforeAmount: string;
+  betweenAmount: string;
+  returnAmount: string;
+  localExtraPerKm: string;
+  serialNo: string;
+  agreementDate: string;
+  special: string;
+}
+
 // Fill blanks with an underline so a printed agreement has a space to write in.
 function fill(v: string): string {
   const s = (v ?? "").trim();
@@ -170,86 +207,63 @@ function fill(v: string): string {
 }
 
 export function buildAgreement(data: AgreementData, lang: Lang): AgreementDoc {
-  const tripType = labelOf(TRIP_TYPES, data.tripType, lang);
-  const busType = labelOf(BUS_TYPES, data.busType, lang);
-  const payment = labelOf(PAYMENT_TYPES, data.paymentType, lang);
-  const signWords = amountInWords(data.signAmount);
-  const rateWords = amountInWords(data.ratePerKm);
-  const finalWords = amountInWords(data.finalAmount);
-  const fromDate = formatAgreementDate(data.fromDate);
-  const toDate = formatAgreementDate(data.toDate);
-  const fromTime = formatTime12(data.fromTime);
-  const toTime = formatTime12(data.toTime);
-  const advanceDate = formatAgreementDate(data.advanceDate);
-  const agreementDate = formatAgreementDate(data.agreementDate);
-
-  const company = {
-    name: lang === "hi" ? "महालक्ष्मी ट्रेवल्स" : "MAHALAXMI TRAVELS",
-    regd: lang === "hi" ? "(रजि.)" : "(Regd.)",
-    address: lang === "hi" ? "2, स्टेशन रोड, जयपुर" : "2, Station Road, Jaipur",
-    phone: "0141-2369307, 0141-4040340",
-    mobile: lang === "hi" ? "मोबा. 9414058723" : "Mob. 9414058723",
+  const vals: Vals = {
+    tripType: fill(labelOf(TRIP_TYPES, data.tripType, lang)),
+    busType: fill(labelOf(BUS_TYPES, data.busType, lang)),
+    payment: fill(labelOf(PAYMENT_TYPES, data.paymentType, lang)),
+    name: fill(data.name),
+    fatherName: fill(data.fatherName),
+    address: fill(data.address),
+    mobile: fill(data.mobile),
+    advanceDate: fill(formatAgreementDate(data.advanceDate)),
+    signAmount: fill(data.signAmount),
+    signWords: fill(amountInWords(data.signAmount)),
+    ratePerKm: fill(data.ratePerKm),
+    rateWords: fill(amountInWords(data.ratePerKm)),
+    finalAmount: fill(data.finalAmount),
+    finalWords: fill(amountInWords(data.finalAmount)),
+    pickupCity: fill(data.pickupCity),
+    dropCity: fill(data.dropCity),
+    fromDate: fill(formatAgreementDate(data.fromDate)),
+    fromTime: fill(formatTime12(data.fromTime)),
+    toDate: fill(formatAgreementDate(data.toDate)),
+    toTime: fill(formatTime12(data.toTime)),
+    returnPlace: fill(data.returnPlace || data.dropCity),
+    paxCount: fill(data.paxCount),
+    extraPaxCharge: fill(data.extraPaxCharge),
+    beforeAmount: fill(data.beforeAmount),
+    betweenAmount: fill(data.betweenAmount),
+    returnAmount: fill(data.returnAmount),
+    localExtraPerKm: fill(data.localExtraPerKm),
+    serialNo: data.serialNo || "",
+    agreementDate: fill(formatAgreementDate(data.agreementDate)),
+    special: data.remark || "",
   };
 
-  if (lang === "hi") {
-    const intro =
-      `${fill(tripType)} के लिए ${fill(busType)} श्रीमान ${fill(data.name)} पुत्र श्री ` +
-      `${fill(data.fatherName)} निवासी ${fill(data.address)} मो.${fill(data.mobile)} से ` +
-      `निम्नलिखित शर्तों के साथ तय हुई। जिसके साई पेटे (अग्रिम) दिनांक ${fill(advanceDate)} को ` +
-      `रुपये ${fill(data.signAmount)} अक्षरे ${fill(signWords)} ${fill(payment)} से प्राप्त किये।`;
+  if (lang === "hi") return buildHindiAgreement(vals);
 
-    const clauses = [
-      `किराया प्रति कि.मी./दिन की दर रु ${fill(data.ratePerKm)} अक्षरे ${fill(rateWords)} लिए जावेंगे, कुल किराया रु ${fill(data.finalAmount)} अक्षरे ${fill(finalWords)} होगा।`,
-      `बस स्थान ${fill(data.pickupCity)} से ${fill(data.dropCity)} तक जाने व आने के वास्ते होगी। दिनांक ${fill(fromDate)} समय ${fill(fromTime)} रवाना होगी और दिनांक ${fill(toDate)} को समय ${fill(toTime)} स्थान ${fill(data.returnPlace || data.dropCity)} से वापस रवाना होगी।`,
-      `गाड़ी में कुल ${fill(data.paxCount)} सवारियां होगी। इससे ज्यादा सवारियां होने पर रु ${fill(data.extraPaxCharge)} प्रति सवारी अलग से चार्ज किया जायेगा।`,
-      `गाड़ी रवाना होने से पूर्व रुपये ${fill(data.beforeAmount)} कम्पनी/चालक को देने होंगे तथा जाते समय रास्ते में रुपये ${fill(data.betweenAmount)} देने होंगे व वापसी में आते समय शेष रकम चुकती रुपये ${fill(data.returnAmount)} चालक को देने होंगे।`,
-      `18% जीएसटी अलग से पार्टी को देना होगा।`,
-      `सामान की जिम्मेदारी व हिफाजत पूर्णतया पार्टी की होगी।`,
-      `अगर गाड़ी रास्ते में ब्रेक डाउन हो जावेगी तो कम्पनी इसकी जिम्मेदार नहीं होगी और न ही हर्जे-खर्चे की जिम्मेदार होगी।`,
-      `तयशुदा समय के बाद हॉल्टेज चालक की मर्जी से होगा व उसका किराया अलग से लिया जायेगा।`,
-      `3 से 8 वर्ष तक के बच्चों को आधी सवारी मानी जावेगी व 8 साल से बड़ी उम्र की एक सवारी मानी जावेगी। आधी सवारी को सीट नहीं दी जायेगी।`,
-      `यदि एग्रीमेन्ट रद्द किया गया तो अग्रिम (एडवांस) की राशि नहीं लौटाई जावेगी।`,
-      `यदि एग्रीमेन्ट के तहत दी जाने वाली गाड़ी खराब हो जाए अथवा किन्हीं अन्य कारणों से उपलब्ध न होने पर कम्पनी अन्य गाड़ी, जो भी मौजूदा समय पर उपलब्ध होगी वही दी जावेगी।`,
-      `निर्धारित तारीख के आठ दिन पहले या शर्त के अनुसार शादी कार्ड/यात्री सूची देने पर ही यह एग्रीमेन्ट मान्य होगा।`,
-      `गाड़ी कच्चे, खराब मार्ग एवं तंग गलियों में नहीं जावेगी।`,
-      `गाड़ी में किसी भी यात्री द्वारा किया गया नुकसान पार्टी/यात्री से वसूल किया जावेगा।`,
-      `गाड़ी में वीडियो/टी.वी./पंखे/लाइट/टेपरिकार्डर आदि चालक की सुविधा एवं स्वीकृति पर ही चलाये जा सकेंगे।`,
-      `गाड़ी में विस्फोटक, नशीले, ज्वलनशील पदार्थ एवं कानूनन वर्जित वस्तुएं ले जाना सख्त मना है।`,
-      `यदि यात्रा के दौरान विशेष परिस्थितियों में मार्ग बदला गया तो गन्तव्य स्थान पर गाड़ी समय पर न पहुंच सके, इसके लिए कम्पनी की कोई जिम्मेदारी नहीं होगी।`,
-      `लोकल घूमने के लिए किराये की तयशुदा राशि के अलावा रुपये ${fill(data.localExtraPerKm)} प्रति कि.मी. अलग से चार्ज होगा।`,
-      `सभी प्रसंगों का न्याय क्षेत्र जयपुर होगा।`,
-      `अनुबंध की तारीख के बाद डीजल व टैक्स बढ़ने पर पार्टी द्वारा बढ़ा हुआ डीजल टैक्स का पैसा अलग से देना होगा।`,
-    ];
-
-    return {
-      company,
-      title: "अनुबंध पत्र",
-      serialLabel: "क्रमांकः",
-      dateLabel: "दिनांकः",
-      serialNo: data.serialNo || "",
-      agreementDate,
-      intro,
-      clauses,
-      specialLabel: "विशेष",
-      special: data.remark || "",
-      signParty: "हस्ताक्षर ग्राहक/पार्टी",
-      signCompany: "वास्ते: महालक्ष्मी ट्रेवल्स",
-    };
-  }
+  const v = vals;
+  const company = {
+    name: "MAHALAXMI TRAVELS",
+    regd: "(Regd.)",
+    address: "2, Station Road, Jaipur",
+    phone: "0141-2369307, 0141-4040340",
+    mobile: "Mob. 9414058723",
+  };
 
   // English
   const intro =
-    `This agreement for ${fill(tripType)} with a ${fill(busType)} bus is made with ` +
-    `Shri ${fill(data.name)}, son of Shri ${fill(data.fatherName)}, resident of ` +
-    `${fill(data.address)}, Mob. ${fill(data.mobile)}, on the following terms. ` +
-    `Against this, an advance (token) of Rs. ${fill(data.signAmount)} ` +
-    `(${fill(signWords)}) was received in ${fill(payment)} on ${fill(advanceDate)}.`;
+    `This agreement for ${v.tripType} with a ${v.busType} bus is made with ` +
+    `Shri ${v.name}, son of Shri ${v.fatherName}, resident of ` +
+    `${v.address}, Mob. ${v.mobile}, on the following terms. ` +
+    `Against this, an advance (token) of Rs. ${v.signAmount} ` +
+    `(${v.signWords}) was received in ${v.payment} on ${v.advanceDate}.`;
 
   const clauses = [
-    `The fare shall be charged at the rate of Rs. ${fill(data.ratePerKm)} (${fill(rateWords)}) per km/day; the total fare shall be Rs. ${fill(data.finalAmount)} (${fill(finalWords)}).`,
-    `The bus shall run from ${fill(data.pickupCity)} to ${fill(data.dropCity)} and back. It will depart on ${fill(fromDate)} at ${fill(fromTime)}, and will return from ${fill(data.returnPlace || data.dropCity)} on ${fill(toDate)} at ${fill(toTime)}.`,
-    `The bus shall carry a total of ${fill(data.paxCount)} passengers. For any passengers beyond this, Rs. ${fill(data.extraPaxCharge)} per passenger shall be charged separately.`,
-    `Before departure, Rs. ${fill(data.beforeAmount)} shall be paid to the company/driver; Rs. ${fill(data.betweenAmount)} shall be paid en route while going; and the remaining balance of Rs. ${fill(data.returnAmount)} shall be paid to the driver on return.`,
+    `The fare shall be charged at the rate of Rs. ${v.ratePerKm} (${v.rateWords}) per km/day; the total fare shall be Rs. ${v.finalAmount} (${v.finalWords}).`,
+    `The bus shall run from ${v.pickupCity} to ${v.dropCity} and back. It will depart on ${v.fromDate} at ${v.fromTime}, and will return from ${v.returnPlace} on ${v.toDate} at ${v.toTime}.`,
+    `The bus shall carry a total of ${v.paxCount} passengers. For any passengers beyond this, Rs. ${v.extraPaxCharge} per passenger shall be charged separately.`,
+    `Before departure, Rs. ${v.beforeAmount} shall be paid to the company/driver; Rs. ${v.betweenAmount} shall be paid en route while going; and the remaining balance of Rs. ${v.returnAmount} shall be paid to the driver on return.`,
     `18% GST shall be paid separately by the party.`,
     `Responsibility and safety of luggage shall rest entirely with the party.`,
     `If the bus breaks down en route, the company shall not be responsible for it, nor liable for any damages or expenses.`,
@@ -263,7 +277,7 @@ export function buildAgreement(data: AgreementData, lang: Lang): AgreementDoc {
     `Video/TV/fans/lights/tape recorder etc. in the bus may be used only at the driver's convenience and with consent.`,
     `Carrying explosives, intoxicants, inflammable substances and legally prohibited items in the bus is strictly forbidden.`,
     `If the route is changed under special circumstances during the journey and the bus cannot reach the destination on time, the company shall bear no responsibility.`,
-    `For local sightseeing, apart from the agreed fare, Rs. ${fill(data.localExtraPerKm)} per km shall be charged separately.`,
+    `For local sightseeing, apart from the agreed fare, Rs. ${v.localExtraPerKm} per km shall be charged separately.`,
     `The jurisdiction for all matters shall be Jaipur.`,
     `If diesel and taxes increase after the date of the agreement, the party shall separately pay the increased diesel/tax amount.`,
   ];
@@ -271,14 +285,15 @@ export function buildAgreement(data: AgreementData, lang: Lang): AgreementDoc {
   return {
     company,
     title: "AGREEMENT",
+    phoneLabel: "Phone",
     serialLabel: "Sr. No.:",
     dateLabel: "Date:",
-    serialNo: data.serialNo || "",
-    agreementDate,
+    serialNo: v.serialNo,
+    agreementDate: v.agreementDate,
     intro,
     clauses,
     specialLabel: "Special",
-    special: data.remark || "",
+    special: v.special,
     signParty: "Signature of Customer/Party",
     signCompany: "For: Mahalaxmi Travels",
   };

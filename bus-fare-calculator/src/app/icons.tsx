@@ -1,4 +1,4 @@
-// Inline SVG icons — no icon-library dependency.
+// Inline SVG icons - no icon-library dependency.
 
 export function BusIcon() {
   return (

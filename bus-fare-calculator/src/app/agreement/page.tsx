@@ -12,6 +12,7 @@ import {
   TRIP_TYPES,
   buildAgreement,
 } from "@/lib/agreement";
+import { HI_LABELS } from "@/lib/agreementHindi";
 
 const EMPTY: AgreementData = {
   serialNo: "",
@@ -97,7 +98,7 @@ export default function AgreementPage() {
                       : "text-muted hover:text-foreground"
                   } ${focusRing}`}
                 >
-                  {l === "en" ? "English" : "हिन्दी"}
+                  {l === "en" ? "English" : HI_LABELS.hindi}
                 </button>
               ))}
             </div>
@@ -118,8 +119,8 @@ export default function AgreementPage() {
               Booking agreement details
             </h1>
             <p className="mt-1 text-sm text-muted">
-              Fill the customer &amp; trip details — the agreement on the right
-              updates live. Switch language any time.
+              Fill the customer &amp; trip details &mdash; the agreement on the
+              right updates live. Switch language any time.
             </p>
 
             <Group title="Booking type">
@@ -315,7 +316,7 @@ export default function AgreementPage() {
                   className={inputClass}
                   value={data.remark}
                   onChange={(e) => set("remark", e.target.value)}
-                  placeholder="e.g. 32*8 WASHROOM, extra conditions…"
+                  placeholder="e.g. 32*8 WASHROOM, extra conditions..."
                 />
               </Field>
             </Group>
@@ -342,7 +343,7 @@ export default function AgreementPage() {
                 </div>
                 <div className="mt-0.5">{doc.company.address}</div>
                 <div className="text-[12px]">
-                  {lang === "hi" ? "फोन" : "Phone"}: {doc.company.phone} · {doc.company.mobile}
+                  {doc.phoneLabel}: {doc.company.phone} &middot; {doc.company.mobile}
                 </div>
                 <div className="mx-auto mt-3 inline-block border-y-2 border-[#111] px-6 py-0.5 text-lg font-bold">
                   {doc.title}

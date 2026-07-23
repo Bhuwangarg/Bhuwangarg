@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Field, focusRing, inputClass } from "../ui";
-import { ArrowLeftIcon, PrintIcon } from "../icons";
+import { ArrowLeftIcon, PrintIcon, Spinner, WhatsAppIcon } from "../icons";
 import {
   AgreementData,
   BUS_TYPES,
@@ -47,6 +47,8 @@ const EMPTY: AgreementData = {
 export default function AgreementPage() {
   const [lang, setLang] = useState<Lang>("hi");
   const [data, setData] = useState<AgreementData>(EMPTY);
+  const [sharing, setSharing] = useState(false);
+  const docRef = useRef<HTMLDivElement>(null);
 
   // Prefill today's date (client-only, avoids SSR hydration mismatch).
   useEffect(() => {
@@ -68,6 +70,106 @@ export default function AgreementPage() {
     lang === "hi"
       ? "'Noto Sans Devanagari','Nirmala UI','Mangal','Kohinoor Devanagari',system-ui,sans-serif"
       : "Georgia,'Times New Roman',serif";
+
+  // A short WhatsApp caption summarising the trip.
+  function shareText(): string {
+    const L = (hi: string, en: string) => (lang === "hi" ? hi : en);
+    return [
+      `${doc.company.name} - ${doc.title}`,
+      data.name ? `${L("ग्राहक", "Customer")}: ${data.name}` : "",
+      data.pickupCity || data.dropCity
+        ? `${L("मार्ग", "Route")}: ${data.pickupCity || "?"} -> ${data.dropCity || "?"}`
+        : "",
+      data.finalAmount ? `${L("कुल किराया", "Total fare")}: Rs. ${data.finalAmount}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  // If the customer's mobile is filled, target that chat directly.
+  function whatsappNumber(): string {
+    const digits = (data.mobile.match(/\d/g) || []).join("");
+    return digits.length >= 10 ? "91" + digits.slice(-10) : "";
+  }
+
+  // Render the live document to a PDF and hand it to WhatsApp (native share
+  // sheet where supported; otherwise download the PDF and open a WhatsApp chat
+  // with a caption so staff can attach it).
+  async function shareOnWhatsApp() {
+    setSharing(true);
+    try {
+      let file: File | null = null;
+      const node = docRef.current;
+      if (node) {
+        try {
+          const [htmlToImage, jspdf] = await Promise.all([
+            import("html-to-image"),
+            import("jspdf"),
+          ]);
+          const canvas = await htmlToImage.toCanvas(node, {
+            pixelRatio: 2,
+            backgroundColor: "#ffffff",
+          });
+          const pdf = new jspdf.jsPDF({ unit: "pt", format: "a4" });
+          const pageW = pdf.internal.pageSize.getWidth();
+          const pageH = pdf.internal.pageSize.getHeight();
+          const imgH = (canvas.height * pageW) / canvas.width;
+          const imgData = canvas.toDataURL("image/jpeg", 0.92);
+          let position = 0;
+          let remaining = imgH;
+          pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH);
+          remaining -= pageH;
+          while (remaining > 0) {
+            position -= pageH;
+            pdf.addPage();
+            pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH);
+            remaining -= pageH;
+          }
+          const blob = pdf.output("blob");
+          const safeName = (data.name || "mahalaxmi").replace(/\s+/g, "_");
+          file = new File([blob], `agreement-${safeName}.pdf`, {
+            type: "application/pdf",
+          });
+        } catch {
+          file = null; // fall back to text-only WhatsApp below
+        }
+      }
+
+      const waUrl = `https://wa.me/${whatsappNumber()}?text=${encodeURIComponent(
+        shareText(),
+      )}`;
+
+      if (
+        file &&
+        typeof navigator !== "undefined" &&
+        navigator.canShare?.({ files: [file] })
+      ) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: doc.title,
+            text: shareText(),
+          });
+          return;
+        } catch {
+          // user dismissed the share sheet, or it failed — fall through
+        }
+      }
+
+      // Fallback: download the PDF (if we built one) and open WhatsApp.
+      if (file) {
+        const href = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = file.name;
+        a.click();
+        URL.revokeObjectURL(href);
+      }
+      window.open(waUrl, "_blank");
+    } finally {
+      setSharing(false);
+    }
+  }
 
   return (
     <main className="flex-1 w-full">
@@ -105,9 +207,18 @@ export default function AgreementPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className={`inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover ${focusRing}`}
+              className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary/40 ${focusRing}`}
             >
               <PrintIcon /> Print / Save PDF
+            </button>
+            <button
+              type="button"
+              onClick={shareOnWhatsApp}
+              disabled={sharing}
+              className={`inline-flex items-center gap-2 rounded-lg bg-[#25D366] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1da851] disabled:opacity-60 ${focusRing}`}
+            >
+              {sharing ? <Spinner /> : <WhatsAppIcon />}
+              {sharing ? "Preparing…" : "Share on WhatsApp"}
             </button>
           </div>
         </div>
@@ -333,14 +444,18 @@ export default function AgreementPage() {
           {/* ---- Live agreement preview ---- */}
           <section className="lg:sticky lg:top-6">
             <div
+              ref={docRef}
               className="agreement-doc mx-auto max-w-[820px] rounded-lg border border-border bg-white px-8 py-8 text-[13px] leading-relaxed text-[#111] shadow-sm sm:px-12"
               style={{ fontFamily: docFont }}
             >
               <div className="text-center">
-                <div className="text-2xl font-bold tracking-tight">
-                  {doc.company.name}{" "}
-                  <span className="text-base font-normal">{doc.company.regd}</span>
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/mahalaxmi-logo.png"
+                  alt={doc.company.name}
+                  className="mx-auto h-auto w-full max-w-[340px]"
+                />
+                <div className="mt-1 text-sm font-semibold">{doc.company.regd}</div>
                 <div className="mt-0.5">{doc.company.address}</div>
                 <div className="text-[12px]">
                   {doc.phoneLabel}: {doc.company.phone} &middot; {doc.company.mobile}

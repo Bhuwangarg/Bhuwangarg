@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { computeFare, formatINR, formatKm, formatRate } from "@/lib/fare";
 import {
   Field,
@@ -10,6 +10,7 @@ import {
   LocationRow,
   NumberInput,
   focusRing,
+  inputClass,
 } from "./ui";
 import {
   CheckIcon,
@@ -35,6 +36,12 @@ type Stop = { id: number; value: string };
 // their own ordered list between the start and the destination.
 const MAX_STOPS = 10;
 
+// There is no free, keyless API for exact Indian toll-plaza fares, so toll is
+// estimated as distance x a per-km bus toll rate. The operator calibrates the
+// rate to their routes once and it is remembered.
+const DEFAULT_TOLL_RATE = "2.5";
+const TOLL_RATE_KEY = "busfare.tollRate";
+
 export default function Home() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -42,6 +49,9 @@ export default function Home() {
   const [distanceKm, setDistanceKm] = useState("");
   const [ratePerKm, setRatePerKm] = useState("");
   const [toll, setToll] = useState("");
+  // Toll can be auto-estimated from the route distance, or typed by hand.
+  const [estimateToll, setEstimateToll] = useState(true);
+  const [tollRate, setTollRate] = useState(DEFAULT_TOLL_RATE);
   const [distance, setDistance] = useState<DistanceStatus>({ state: "idle" });
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   // Exact GPS coordinates for the start when "Use my location" was used, so we
@@ -52,14 +62,47 @@ export default function Home() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const nextStopId = useRef(0);
 
+  // Remember the operator's calibrated toll rate across sessions. Reading
+  // localStorage must happen after mount (it isn't available during SSR), so
+  // hydrating state in this effect is intentional.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(TOLL_RATE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydrate from persisted preference
+      if (saved !== null) setTollRate(saved);
+    } catch {
+      /* localStorage unavailable — keep the default. */
+    }
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TOLL_RATE_KEY, tollRate);
+    } catch {
+      /* ignore */
+    }
+  }, [tollRate]);
+
+  // Estimated toll = route distance x per-km bus toll rate (rounded).
+  const estimatedToll = useMemo(() => {
+    const km = Number(distanceKm);
+    const rate = Number(tollRate);
+    if (!Number.isFinite(km) || !Number.isFinite(rate) || km <= 0 || rate <= 0) {
+      return 0;
+    }
+    return Math.round(km * rate);
+  }, [distanceKm, tollRate]);
+
+  // The toll actually used in the fare: the estimate, or the typed amount.
+  const effectiveToll = estimateToll ? estimatedToll : Number(toll);
+
   const fare = useMemo(
     () =>
       computeFare({
         distanceKm: Number(distanceKm),
         ratePerKm: Number(ratePerKm),
-        tollAmount: Number(toll),
+        tollAmount: effectiveToll,
       }),
-    [distanceKm, ratePerKm, toll],
+    [distanceKm, ratePerKm, effectiveToll],
   );
 
   const hasQuote = fare.distanceKm > 0 && fare.ratePerKm > 0;
@@ -358,11 +401,57 @@ export default function Home() {
             </div>
 
             <div className="mt-4">
-              <Field
-                label="Toll & extra charges"
-                htmlFor="toll"
-                hint="toll tax, parking, permits — optional"
-              >
+              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                <span className="text-sm font-medium text-foreground">
+                  Toll & extra charges
+                </span>
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted">
+                  <input
+                    type="checkbox"
+                    checked={estimateToll}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      // When switching to manual, seed the field with the
+                      // current estimate so the number doesn't jump to 0.
+                      if (!on) setToll(estimatedToll ? String(estimatedToll) : toll);
+                      setEstimateToll(on);
+                    }}
+                    className="h-3.5 w-3.5 rounded border-border accent-[var(--primary)]"
+                  />
+                  Auto-estimate
+                </label>
+              </div>
+
+              {estimateToll ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
+                        ₹
+                      </span>
+                      <input
+                        readOnly
+                        aria-label="Estimated toll"
+                        value={estimatedToll.toLocaleString("en-IN")}
+                        className={`${inputClass} cursor-default pl-8`}
+                      />
+                    </div>
+                    <NumberInput
+                      id="toll-rate"
+                      value={tollRate}
+                      onChange={setTollRate}
+                      prefix="₹"
+                      suffix="/km"
+                      placeholder={DEFAULT_TOLL_RATE}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-muted">
+                    Rough estimate at ₹{tollRate || "0"}/km of route. Tune the
+                    rate to match your usual tolls, or untick to type the exact
+                    amount.
+                  </p>
+                </>
+              ) : (
                 <NumberInput
                   id="toll"
                   value={toll}
@@ -370,7 +459,7 @@ export default function Home() {
                   prefix="₹"
                   placeholder="0"
                 />
-              </Field>
+              )}
             </div>
 
             <button
@@ -409,7 +498,13 @@ export default function Home() {
               />
               <LineItem
                 label="Toll & extra charges"
-                detail={fare.tollAmount > 0 ? "added to fare" : "none"}
+                detail={
+                  fare.tollAmount > 0
+                    ? estimateToll
+                      ? `estimated at ₹${tollRate || "0"}/km`
+                      : "added to fare"
+                    : "none"
+                }
                 value={formatINR(fare.tollAmount)}
               />
             </div>

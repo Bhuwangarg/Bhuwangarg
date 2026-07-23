@@ -15,12 +15,14 @@ import {
 import {
   CheckIcon,
   CopyIcon,
+  FileTextIcon,
   LocationIcon,
   PlusIcon,
   PrintIcon,
   RouteIcon,
   Spinner,
 } from "./icons";
+import Link from "next/link";
 
 type DistanceStatus =
   | { state: "idle" }
@@ -577,6 +579,25 @@ export default function Home() {
               </p>
             )}
           </section>
+        </div>
+
+        {/* ---- Booking agreement ---- */}
+        <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6 no-print">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">
+              Booking agreement
+            </h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Generate a printable hire agreement (English or हिन्दी) with the
+              customer&apos;s details.
+            </p>
+          </div>
+          <Link
+            href="/agreement"
+            className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover ${focusRing}`}
+          >
+            <FileTextIcon /> Generate agreement
+          </Link>
         </div>
 
         <Footer />

@@ -14,6 +14,7 @@ import {
 import {
   CheckIcon,
   CopyIcon,
+  LocationIcon,
   PlusIcon,
   PrintIcon,
   RouteIcon,
@@ -43,6 +44,12 @@ export default function Home() {
   const [toll, setToll] = useState("");
   const [distance, setDistance] = useState<DistanceStatus>({ state: "idle" });
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  // Exact GPS coordinates for the start when "Use my location" was used, so we
+  // route from the real position rather than a re-geocoded address. Cleared as
+  // soon as the operator edits the From field by hand.
+  const [fromCoords, setFromCoords] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const nextStopId = useRef(0);
 
   const fare = useMemo(
@@ -69,6 +76,44 @@ export default function Home() {
     setDistance((d) => (d.state === "idle" ? d : { state: "idle" }));
   }
 
+  // Fill "From" with the operator's current position. We keep the exact
+  // coordinates for routing and show a readable address in the field.
+  function useMyLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationError("Location isn't available in this browser.");
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setFromCoords(`${latitude.toFixed(6)},${longitude.toFixed(6)}`);
+        clearDistanceBanner();
+        try {
+          const res = await fetch(
+            `/api/reverse?lat=${latitude}&lon=${longitude}`,
+          );
+          const data = await res.json();
+          setFrom(res.ok && data.label ? data.label : "My current location");
+        } catch {
+          setFrom("My current location");
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        setLocationError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission denied — type the starting point instead."
+            : "Couldn't get your location — type the starting point instead.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
   function addStop() {
     setStops((s) => [...s, { id: nextStopId.current++, value: "" }]);
     clearDistanceBanner();
@@ -83,7 +128,18 @@ export default function Home() {
   }
 
   async function fetchDistance() {
-    if (routePlaces.length < 2) {
+    // Ordered points sent to the API — the start uses exact GPS coordinates
+    // when "Use my location" was used, everything else uses the typed name.
+    const apiPoints: string[] = [];
+    const fromValue = fromCoords && from.trim() ? fromCoords : from.trim();
+    if (fromValue) apiPoints.push(fromValue);
+    stops.forEach((s) => {
+      const v = s.value.trim();
+      if (v) apiPoints.push(v);
+    });
+    if (to.trim()) apiPoints.push(to.trim());
+
+    if (apiPoints.length < 2) {
       setDistance({
         state: "error",
         message: "Enter at least a starting point and a destination first.",
@@ -94,7 +150,7 @@ export default function Home() {
     setCopyStatus("idle");
     try {
       const params = new URLSearchParams();
-      routePlaces.forEach((p) => params.append("points", p));
+      apiPoints.forEach((p) => params.append("points", p));
       const res = await fetch(`/api/distance?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {
@@ -124,6 +180,9 @@ export default function Home() {
     setToll("");
     setDistance({ state: "idle" });
     setCopyStatus("idle");
+    setFromCoords(null);
+    setLocating(false);
+    setLocationError(null);
   }
 
   async function copyQuote() {
@@ -155,7 +214,7 @@ export default function Home() {
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.15fr_1fr] lg:items-start">
           {/* ---- Inputs ---- */}
-          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7 no-print">
+          <section className="min-w-0 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7 no-print">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
               Trip details
             </h2>
@@ -174,9 +233,28 @@ export default function Home() {
                   placeholder="e.g. Jaipur"
                   onChange={(v) => {
                     setFrom(v);
+                    setFromCoords(null);
+                    setLocationError(null);
                     clearDistanceBanner();
                   }}
+                  action={
+                    <button
+                      type="button"
+                      onClick={useMyLocation}
+                      disabled={locating}
+                      className={`inline-flex items-center gap-1 rounded text-xs font-medium text-primary transition hover:underline disabled:opacity-60 ${focusRing}`}
+                    >
+                      {locating ? <Spinner /> : <LocationIcon />}
+                      {locating ? "Locating…" : "Use my location"}
+                    </button>
+                  }
                 />
+
+                {locationError && (
+                  <p role="status" className="text-xs text-[var(--danger)]">
+                    {locationError}
+                  </p>
+                )}
 
                 {stops.map((s, i) => (
                   <LocationRow
@@ -305,7 +383,7 @@ export default function Home() {
           </section>
 
           {/* ---- Quote ---- */}
-          <section className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7 lg:sticky lg:top-8">
+          <section className="min-w-0 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7 lg:sticky lg:top-8">
             <div className="flex items-start justify-between gap-3">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
                 Fare quote

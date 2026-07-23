@@ -41,6 +41,7 @@ export function LocationRow({
   onChange,
   placeholder,
   onRemove,
+  action,
 }: {
   label: string;
   id: string;
@@ -48,6 +49,7 @@ export function LocationRow({
   onChange: (v: string) => void;
   placeholder?: string;
   onRemove?: () => void;
+  action?: React.ReactNode;
 }) {
   return (
     <div>
@@ -56,7 +58,7 @@ export function LocationRow({
         className="mb-1.5 flex items-baseline justify-between gap-2"
       >
         <span className="text-sm font-medium text-foreground">{label}</span>
-        {onRemove && (
+        {onRemove ? (
           <button
             type="button"
             onClick={onRemove}
@@ -65,6 +67,8 @@ export function LocationRow({
           >
             Remove
           </button>
+        ) : (
+          action
         )}
       </label>
       <input

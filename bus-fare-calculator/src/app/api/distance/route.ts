@@ -55,6 +55,26 @@ interface GeoPoint {
   label: string;
 }
 
+// A point may arrive as raw "lat,lon" coordinates (from "Use my location")
+// instead of a place name — in that case skip geocoding and use it directly.
+function parseCoords(value: string): GeoPoint | null {
+  const m = value.match(/^\s*(-?\d{1,3}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    lat < -90 ||
+    lat > 90 ||
+    lon < -180 ||
+    lon > 180
+  ) {
+    return null;
+  }
+  return { lat, lon, label: "Current location" };
+}
+
 async function geocode(place: string): Promise<GeoPoint | null> {
   const cacheKey = `geo:${place.toLowerCase()}`;
   const cached = cacheGet<GeoPoint | null>(cacheKey);
@@ -161,7 +181,7 @@ export async function GET(request: Request) {
     // misleading "location not found".
     const geocoded: GeoPoint[] = [];
     for (const place of places) {
-      const point = await geocode(place);
+      const point = parseCoords(place) ?? (await geocode(place));
       if (!point) {
         return NextResponse.json(
           { error: `Could not find the location "${place}".` },

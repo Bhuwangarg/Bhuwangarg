@@ -208,7 +208,7 @@ function fill(v: string): string {
 
 export function buildAgreement(data: AgreementData, lang: Lang): AgreementDoc {
   // Amount-in-words must match the document language, so a Hindi agreement
-  // reads "ग्यारह हज़ार रुपये मात्र" rather than "Eleven Thousand Rupees Only".
+  // uses the Hindi converter rather than the English "Eleven Thousand..." form.
   const words = lang === "hi" ? amountInWordsHi : amountInWords;
   const vals: Vals = {
     tripType: fill(labelOf(TRIP_TYPES, data.tripType, lang)),

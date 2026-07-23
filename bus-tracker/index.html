@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fleet Document Tracker</title>
+  <meta name="description" content="Bus-wise document & expiry tracker" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="./styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%9A%8C%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">🚌</span>
+        <div class="brand-text">
+          <h1 id="org-name">Fleet</h1>
+          <p id="app-subtitle">Document &amp; expiry tracker</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span id="sync-badge" class="sync-badge local" title="Storage mode">● Local</span>
+        <button id="btn-add" class="btn btn-primary">＋ Add / update document</button>
+        <button id="btn-settings" class="btn btn-ghost" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <section class="kpis" id="kpis"></section>
+
+    <nav class="toolbar">
+      <div class="toolbar-left">
+        <input id="search" type="search" placeholder="Search bus number…" autocomplete="off" />
+        <div class="chips" id="status-filters"></div>
+      </div>
+      <div class="toolbar-right">
+        <select id="type-filter" title="Document type"></select>
+        <div class="viewtoggle">
+          <button data-view="attention" class="vt active">Attention list</button>
+          <button data-view="buses" class="vt">By bus</button>
+        </div>
+        <div class="menu">
+          <button id="btn-data" class="btn btn-ghost" title="Data">⋯</button>
+          <div class="menu-pop" id="data-menu" hidden>
+            <button id="btn-export">⬇ Export data (JSON)</button>
+            <button id="btn-import">⬆ Import data (JSON)</button>
+            <a id="btn-drive" href="#" target="_blank" rel="noopener">🗂 Open Drive folder</a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main id="content"><div class="loading">Loading fleet…</div></main>
+
+    <footer class="foot">
+      <span id="foot-meta"></span>
+    </footer>
+  </div>
+
+  <!-- Add / edit document modal -->
+  <div class="modal-backdrop" id="doc-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2 id="doc-modal-title">Add / update document</h2>
+        <button class="modal-x" data-close>✕</button>
+      </div>
+      <form id="doc-form" class="modal-body">
+        <label class="field">
+          <span>Bus</span>
+          <input list="bus-list" id="f-bus" placeholder="e.g. RJ14 PF 0207" required />
+          <datalist id="bus-list"></datalist>
+          <small>Pick an existing bus or type a new registration to add it.</small>
+        </label>
+        <label class="field">
+          <span>Document type</span>
+          <select id="f-type" required></select>
+        </label>
+        <label class="field">
+          <span>Expiry date</span>
+          <input type="date" id="f-expiry" />
+          <small>Leave blank if the document has no expiry (e.g. RC).</small>
+        </label>
+        <label class="field">
+          <span>Document file <em>(optional)</em></span>
+          <input type="file" id="f-file" accept="image/*,application/pdf" />
+          <small id="f-file-note">Attach a scan/photo. Stored with this record.</small>
+        </label>
+        <label class="field">
+          <span>Note <em>(optional)</em></span>
+          <input type="text" id="f-note" placeholder="e.g. renewed at Jaipur RTO" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal-backdrop" id="settings-modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h2>Settings</h2>
+        <button class="modal-x" data-close>✕</button>
+      </div>
+      <div class="modal-body">
+        <label class="field">
+          <span>"Expiring soon" window (days)</span>
+          <input type="number" id="s-days" min="1" max="365" />
+        </label>
+        <div class="field">
+          <span>Storage mode</span>
+          <p class="muted" id="s-storage-desc"></p>
+        </div>
+        <details class="field">
+          <summary>Connect shared team database (Supabase)</summary>
+          <p class="muted">Paste your Supabase project URL and public anon key to sync edits across everyone. These are safe to store in the app.</p>
+          <input type="text" id="s-sb-url" placeholder="https://xxxx.supabase.co" />
+          <input type="text" id="s-sb-key" placeholder="anon public key" />
+          <small class="muted">Applies on this device. For a permanent team-wide rollout, bake these into <code>config.js</code> and redeploy.</small>
+        </details>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" data-close>Close</button>
+          <button type="button" id="s-save" class="btn btn-primary">Save settings</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="import-file" accept="application/json" hidden />
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>

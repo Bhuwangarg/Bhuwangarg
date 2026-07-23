@@ -36,11 +36,13 @@ type Stop = { id: number; value: string };
 // their own ordered list between the start and the destination.
 const MAX_STOPS = 10;
 
-// There is no free, keyless API for exact Indian toll-plaza fares, so toll is
-// estimated as distance x a per-km bus toll rate. The operator calibrates the
-// rate to their routes once and it is remembered.
+// Toll defaults to a plain amount the operator types (actual tolls/parking).
+// An optional auto-estimate can compute it as distance x a per-km bus toll
+// rate — kept OFF by default so extra charges never show a fare-sized number.
+// (There is no free, keyless API for exact Indian toll-plaza fares.)
 const DEFAULT_TOLL_RATE = "2.5";
-const TOLL_RATE_KEY = "busfare.tollRate";
+// v2 key: discard any previously stored (possibly wrong) toll rate.
+const TOLL_RATE_KEY = "busfare.tollRatePerKm.v2";
 
 export default function Home() {
   const [from, setFrom] = useState("");
@@ -49,8 +51,8 @@ export default function Home() {
   const [distanceKm, setDistanceKm] = useState("");
   const [ratePerKm, setRatePerKm] = useState("");
   const [toll, setToll] = useState("");
-  // Toll can be auto-estimated from the route distance, or typed by hand.
-  const [estimateToll, setEstimateToll] = useState(true);
+  // Toll is a typed amount by default; auto-estimate is opt-in.
+  const [estimateToll, setEstimateToll] = useState(false);
   const [tollRate, setTollRate] = useState(DEFAULT_TOLL_RATE);
   const [distance, setDistance] = useState<DistanceStatus>({ state: "idle" });
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
@@ -425,30 +427,38 @@ export default function Home() {
               {estimateToll ? (
                 <>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="relative">
-                      <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
-                        ₹
-                      </span>
-                      <input
-                        readOnly
-                        aria-label="Estimated toll"
-                        value={estimatedToll.toLocaleString("en-IN")}
-                        className={`${inputClass} cursor-default pl-8`}
+                    <Field
+                      label="Estimated toll"
+                      htmlFor="est-toll"
+                      hint="from distance"
+                    >
+                      <div className="relative">
+                        <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted">
+                          ₹
+                        </span>
+                        <input
+                          id="est-toll"
+                          readOnly
+                          value={estimatedToll.toLocaleString("en-IN")}
+                          className={`${inputClass} cursor-default pl-8`}
+                        />
+                      </div>
+                    </Field>
+                    <Field label="Toll rate" htmlFor="toll-rate" hint="₹ per km">
+                      <NumberInput
+                        id="toll-rate"
+                        value={tollRate}
+                        onChange={setTollRate}
+                        prefix="₹"
+                        suffix="/km"
+                        placeholder={DEFAULT_TOLL_RATE}
                       />
-                    </div>
-                    <NumberInput
-                      id="toll-rate"
-                      value={tollRate}
-                      onChange={setTollRate}
-                      prefix="₹"
-                      suffix="/km"
-                      placeholder={DEFAULT_TOLL_RATE}
-                    />
+                    </Field>
                   </div>
                   <p className="mt-1.5 text-xs text-muted">
-                    Rough estimate at ₹{tollRate || "0"}/km of route. Tune the
-                    rate to match your usual tolls, or untick to type the exact
-                    amount.
+                    Rough estimate at ₹{tollRate || "0"}/km of route — this is a
+                    toll rate, separate from your ₹/km fare rate. Untick to type
+                    an exact amount.
                   </p>
                 </>
               ) : (

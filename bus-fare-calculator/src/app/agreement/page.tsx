@@ -73,14 +73,16 @@ export default function AgreementPage() {
 
   // A short WhatsApp caption summarising the trip.
   function shareText(): string {
-    const L = (hi: string, en: string) => (lang === "hi" ? hi : en);
+    const hi = lang === "hi";
     return [
       `${doc.company.name} - ${doc.title}`,
-      data.name ? `${L("ग्राहक", "Customer")}: ${data.name}` : "",
+      data.name ? `${hi ? HI_LABELS.customer : "Customer"}: ${data.name}` : "",
       data.pickupCity || data.dropCity
-        ? `${L("मार्ग", "Route")}: ${data.pickupCity || "?"} -> ${data.dropCity || "?"}`
+        ? `${hi ? HI_LABELS.route : "Route"}: ${data.pickupCity || "?"} -> ${data.dropCity || "?"}`
         : "",
-      data.finalAmount ? `${L("कुल किराया", "Total fare")}: Rs. ${data.finalAmount}` : "",
+      data.finalAmount
+        ? `${hi ? HI_LABELS.totalFare : "Total fare"}: Rs. ${data.finalAmount}`
+        : "",
     ]
       .filter(Boolean)
       .join("\n");

@@ -17,6 +17,9 @@ export const HI_LABELS: Record<string, string> = {
   epayment: "ई-पेमेन्ट",
   hindi: "हिन्दी",
   phone: "फोन",
+  customer: "ग्राहक",
+  route: "मार्ग",
+  totalFare: "कुल किराया",
 };
 
 export function buildHindiAgreement(v: Vals): AgreementDoc {

@@ -455,12 +455,7 @@ export default function AgreementPage() {
               style={{ fontFamily: docFont }}
             >
               <div className="text-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src="/mahalaxmi-logo.png"
-                  alt={doc.company.name}
-                  className="mx-auto h-auto w-full max-w-[340px]"
-                />
+                <LogoMark />
                 <div className="mt-1 text-sm font-semibold">{doc.company.regd}</div>
                 <div className="mt-0.5">{doc.company.address}</div>
                 <div className="text-[12px]">
@@ -512,6 +507,55 @@ export default function AgreementPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// Inline SVG wordmark for the letterhead. Kept as vector (not a PNG) so the
+// whole app ships as plain text and the logo stays crisp in the printed /
+// shared PDF at any size.
+function LogoMark() {
+  return (
+    <svg
+      viewBox="0 0 460 90"
+      className="mx-auto h-auto w-full max-w-[360px]"
+      role="img"
+      aria-label="Maha Laxmi Travels"
+    >
+      {/* mountains + sun mark */}
+      <circle cx="52" cy="30" r="9" fill="#f59e0b" />
+      <path d="M8 74 L44 30 L80 74 Z" fill="#1e3a8a" />
+      <path d="M46 74 L78 34 L110 74 Z" fill="#2563eb" opacity="0.85" />
+      <path
+        d="M30 30 q8 -8 16 0"
+        fill="none"
+        stroke="#1e3a8a"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      {/* wordmark */}
+      <text
+        x="125"
+        y="46"
+        fill="#1e3a8a"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="40"
+        fontWeight="700"
+        fontStyle="italic"
+      >
+        Maha Laxmi
+      </text>
+      <text
+        x="125"
+        y="78"
+        fill="#2563eb"
+        fontFamily="Georgia, 'Times New Roman', serif"
+        fontSize="30"
+        fontWeight="700"
+        letterSpacing="1"
+      >
+        Travels
+      </text>
+    </svg>
   );
 }
 

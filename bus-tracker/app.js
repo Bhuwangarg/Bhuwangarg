@@ -233,6 +233,67 @@
   function editBtn(r) {
     return el("button", { class: "iconbtn", text: r.missing ? "Add" : "Edit", onclick: () => openDocModal(r.bus, r.type, r.doc) });
   }
+  function shareBtn(r) {
+    const doc = r.doc;
+    if (!doc || (!doc.viewUrl && !doc.fileDataUrl)) return null; // nothing to share
+    return el("button", { class: "iconbtn share", title: "Share this document", text: "Share",
+      onclick: (e) => { e.stopPropagation(); openShareMenu(e, r); } });
+  }
+
+  // ---------- share menu ----------
+  let shareEl = null;
+  function closeShareMenu() { if (shareEl) { shareEl.remove(); shareEl = null; } }
+  function copyLink(text) {
+    if (!text) return;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => toast("Link copied")).catch(() => toast("Copy failed — long-press to copy"));
+    } else {
+      const t = el("textarea", { text }); document.body.append(t); t.select();
+      try { document.execCommand("copy"); toast("Link copied"); } catch { toast("Copy failed"); }
+      t.remove();
+    }
+  }
+  async function dataUrlToFile(dataUrl, name) {
+    const res = await fetch(dataUrl); const blob = await res.blob();
+    return new File([blob], name || "document", { type: blob.type || "application/octet-stream" });
+  }
+  function openShareMenu(ev, r) {
+    closeShareMenu();
+    const doc = r.doc;
+    const url = doc && doc.viewUrl ? doc.viewUrl : null;
+    const title = `${r.bus.name} — ${r.type}${doc && doc.expiry ? " (expires " + fmtDate(doc.expiry) + ")" : ""}`;
+    const items = [];
+    if (navigator.share) {
+      items.push(["📲 Share…", async () => {
+        try {
+          if (url) { await navigator.share({ title, text: title, url }); }
+          else if (doc.fileDataUrl) {
+            const f = await dataUrlToFile(doc.fileDataUrl, doc.fileName);
+            if (navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ title, files: [f] });
+            else toast("Sharing this file isn't supported here.");
+          }
+        } catch (e) { /* user cancelled */ }
+      }]);
+    }
+    if (url) {
+      items.push(["🟢 WhatsApp", () => window.open("https://wa.me/?text=" + encodeURIComponent(title + "\n" + url), "_blank", "noopener")]);
+      items.push(["✉️ Email", () => window.open("mailto:?subject=" + encodeURIComponent(title) + "&body=" + encodeURIComponent(title + "\n" + url))]);
+      items.push(["🔗 Copy link", () => copyLink(url)]);
+      items.push(["↗ Open document", () => window.open(url, "_blank", "noopener")]);
+    } else if (doc && doc.fileDataUrl) {
+      items.push(["⬇ Download file", () => { const a = el("a", { href: doc.fileDataUrl, download: doc.fileName || r.type }); document.body.append(a); a.click(); a.remove(); }]);
+    }
+    const menu = el("div", { class: "share-pop" }, [
+      el("div", { class: "share-head", text: title })
+    ].concat(items.map(([label, fn]) => el("button", { text: label, onclick: () => { fn(); closeShareMenu(); } }))));
+    document.body.append(menu);
+    const w = 210, h = 44 + items.length * 40;
+    const x = Math.min(ev.clientX, window.innerWidth - w - 8);
+    const y = Math.min(ev.clientY, window.innerHeight - h - 8);
+    menu.style.left = Math.max(8, x) + "px";
+    menu.style.top = Math.max(8, y) + "px";
+    shareEl = menu;
+  }
 
   function renderAttention(model) {
     const rows = docRows(model).filter(matchesFilters).sort((a, b) => {
@@ -252,7 +313,7 @@
     const tb = el("tbody");
     rows.forEach(r => {
       const status = (r.missing || !r.expiry) ? "unknown" : r.status;
-      const acts = el("div", {}, [viewDocLink(r), editBtn(r)].filter(Boolean));
+      const acts = el("div", {}, [viewDocLink(r), shareBtn(r), editBtn(r)].filter(Boolean));
       tb.append(el("tr", {}, [
         el("td", { class: "busname" }, r.bus.name),
         el("td", {}, [el("strong", { text: r.type }), confFlag(r.doc)].filter(Boolean)),
@@ -295,7 +356,7 @@
           el("div", { class: "de" }, r.missing ? el("span", { class: "muted", text: "not on file" }) :
             el("span", {}, [fmtDate(r.expiry) + "  ", el("small", { class: "muted", text: daysText(r.dl) }), confFlag(r.doc)].filter(Boolean))),
           pillFor(r),
-          el("div", { class: "actions" }, [viewDocLink(r), editBtn(r)].filter(Boolean))
+          el("div", { class: "actions" }, [viewDocLink(r), shareBtn(r), editBtn(r)].filter(Boolean))
         ])))
       ]);
       grid.append(card);
@@ -461,7 +522,8 @@
   function hideModal(sel) { $(sel).hidden = true; }
   $$("[data-close]").forEach(b => b.addEventListener("click", e => { e.target.closest(".modal-backdrop").hidden = true; }));
   $$(".modal-backdrop").forEach(m => m.addEventListener("click", e => { if (e.target === m) m.hidden = true; }));
-  document.addEventListener("keydown", e => { if (e.key === "Escape") $$(".modal-backdrop").forEach(m => m.hidden = true); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") { $$(".modal-backdrop").forEach(m => m.hidden = true); closeShareMenu(); } });
+  window.addEventListener("resize", closeShareMenu);
 
   // ---------- wiring ----------
   $("#btn-add").addEventListener("click", () => openDocModal(null, "Insurance", null));
@@ -470,7 +532,7 @@
   $$(".vt").forEach(b => b.addEventListener("click", () => { ui.view = b.dataset.view; render(); }));
   const dataMenu = $("#data-menu");
   $("#btn-data").addEventListener("click", e => { e.stopPropagation(); dataMenu.hidden = !dataMenu.hidden; });
-  document.addEventListener("click", () => { dataMenu.hidden = true; });
+  document.addEventListener("click", () => { dataMenu.hidden = true; closeShareMenu(); });
   dataMenu.addEventListener("click", e => e.stopPropagation());
   $("#btn-export").addEventListener("click", () => { dataMenu.hidden = true; exportData(); });
   $("#btn-import").addEventListener("click", () => { dataMenu.hidden = true; $("#import-file").click(); });

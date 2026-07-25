@@ -57,6 +57,9 @@ export default function Home() {
   // Toll is a typed amount by default; auto-estimate is opt-in.
   const [estimateToll, setEstimateToll] = useState(false);
   const [tollRate, setTollRate] = useState(DEFAULT_TOLL_RATE);
+  // Most hires are round trips (the bus runs there and back), so charge for
+  // both legs by default. The distance field holds the one-way road distance.
+  const [roundTrip, setRoundTrip] = useState(true);
   const [distance, setDistance] = useState<DistanceStatus>({ state: "idle" });
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   // Exact GPS coordinates for the start when "Use my location" was used, so we
@@ -87,15 +90,21 @@ export default function Home() {
     }
   }, [tollRate]);
 
-  // Estimated toll = route distance x per-km bus toll rate (rounded).
+  // The distance field is the one-way road distance; a round trip charges for
+  // both legs, so the chargeable distance is doubled.
+  const oneWayKm = Number(distanceKm);
+  const legs = roundTrip ? 2 : 1;
+  const tripKm = (Number.isFinite(oneWayKm) ? oneWayKm : 0) * legs;
+
+  // Estimated toll = chargeable distance x per-km bus toll rate (rounded).
+  // Uses the round-trip distance, since tolls are paid on both legs.
   const estimatedToll = useMemo(() => {
-    const km = Number(distanceKm);
     const rate = Number(tollRate);
-    if (!Number.isFinite(km) || !Number.isFinite(rate) || km <= 0 || rate <= 0) {
+    if (!Number.isFinite(tripKm) || !Number.isFinite(rate) || tripKm <= 0 || rate <= 0) {
       return 0;
     }
-    return Math.round(km * rate);
-  }, [distanceKm, tollRate]);
+    return Math.round(tripKm * rate);
+  }, [tripKm, tollRate]);
 
   // The toll actually used in the fare: the estimate, or the typed amount.
   const effectiveToll = estimateToll ? estimatedToll : Number(toll);
@@ -103,11 +112,11 @@ export default function Home() {
   const fare = useMemo(
     () =>
       computeFare({
-        distanceKm: Number(distanceKm),
+        distanceKm: tripKm,
         ratePerKm: Number(ratePerKm),
         tollAmount: effectiveToll,
       }),
-    [distanceKm, ratePerKm, effectiveToll],
+    [tripKm, ratePerKm, effectiveToll],
   );
 
   const hasQuote = fare.distanceKm > 0 && fare.ratePerKm > 0;
@@ -236,10 +245,15 @@ export default function Home() {
   async function copyQuote() {
     const routeLine =
       routePlaces.length >= 2 ? `Route: ${routePlaces.join(" → ")}\n` : "";
+    const distanceLine = roundTrip
+      ? `Distance: ${formatKm(oneWayKm)} one way × 2 = ${formatKm(
+          fare.distanceKm,
+        )} (round trip)\n`
+      : `Distance: ${formatKm(fare.distanceKm)} (one way)\n`;
     const text =
       `Bus trip quote\n` +
       routeLine +
-      `Distance: ${formatKm(fare.distanceKm)}\n` +
+      distanceLine +
       `Rate: ${formatRate(fare.ratePerKm)}/km\n` +
       `Distance charge: ${formatINR(fare.distanceCost)}\n` +
       (fare.tollAmount > 0
@@ -266,6 +280,31 @@ export default function Home() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
               Trip details
             </h2>
+
+            <div
+              className="mt-4 inline-flex rounded-lg border border-border bg-surface-muted p-0.5"
+              role="group"
+              aria-label="Trip type"
+            >
+              {[
+                { round: false, label: "One way" },
+                { round: true, label: "Round trip" },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setRoundTrip(opt.round)}
+                  aria-pressed={roundTrip === opt.round}
+                  className={`rounded-md px-3.5 py-1.5 text-sm font-semibold transition ${
+                    roundTrip === opt.round
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted hover:text-foreground"
+                  } ${focusRing}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
             <form
               onSubmit={(e) => {
@@ -384,7 +423,7 @@ export default function Home() {
               <Field
                 label="Distance"
                 htmlFor="distance"
-                hint="total km — auto-filled or type it"
+                hint="one-way km — auto-filled or type it"
               >
                 <NumberInput
                   id="distance"
@@ -502,9 +541,13 @@ export default function Home() {
                 label="Distance × rate"
                 detail={
                   hasQuote
-                    ? `${formatKm(fare.distanceKm)} × ${formatRate(
-                        fare.ratePerKm,
-                      )}/km`
+                    ? roundTrip
+                      ? `${formatKm(oneWayKm)} × 2 (return) = ${formatKm(
+                          fare.distanceKm,
+                        )} × ${formatRate(fare.ratePerKm)}/km`
+                      : `${formatKm(fare.distanceKm)} × ${formatRate(
+                          fare.ratePerKm,
+                        )}/km`
                     : "enter distance and rate"
                 }
                 value={formatINR(fare.distanceCost)}

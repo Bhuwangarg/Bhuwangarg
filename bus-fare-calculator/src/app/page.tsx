@@ -486,8 +486,10 @@ export default function Home() {
                   )}
                   {distance.state === "ok" && (
                     <p className="text-xs text-[var(--success-text)]">
-                      Total road distance through your route filled in. You can
-                      edit it below.
+                      {roundTrip
+                        ? "One-way road distance filled in below — the return leg is added automatically for a round trip."
+                        : "Road distance through your route filled in below."}{" "}
+                      You can edit it.
                     </p>
                   )}
                   {distance.state === "error" && (
@@ -512,6 +514,15 @@ export default function Home() {
                   suffix="km"
                   placeholder="0"
                 />
+                {/* The field holds the one-way distance, so on a round trip the
+                    chargeable distance is spelled out here — otherwise the
+                    number looks identical for both trip types. */}
+                {roundTrip && oneWayKm > 0 && (
+                  <p className="mt-1.5 text-xs font-medium text-[var(--success-text)]">
+                    Round trip: {formatKm(oneWayKm)} × 2 ={" "}
+                    <strong>{formatKm(tripKm)}</strong> charged
+                  </p>
+                )}
               </Field>
               <Field label="Rate per km" htmlFor="rate" hint="your preferred rate">
                 <NumberInput

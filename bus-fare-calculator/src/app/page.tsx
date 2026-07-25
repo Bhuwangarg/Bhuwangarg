@@ -48,6 +48,27 @@ const DEFAULT_TOLL_RATE = "2.5";
 // v2 key: discard any previously stored (possibly wrong) toll rate.
 const TOLL_RATE_KEY = "busfare.tollRatePerKm.v2";
 
+// Company details for branded share messages. WhatsApp renders *text* as bold.
+const COMPANY = {
+  name: "Maha Laxmi Travels",
+  address: "2, Station Road, Jaipur",
+  mobile: "9414058723",
+};
+
+// Wrap a message body with the company header and a thank-you sign-off so
+// every shared/copied text carries the operator's branding.
+function branded(body: string): string {
+  return (
+    `*${COMPANY.name}*\n` +
+    `${COMPANY.address}\n` +
+    `📞 ${COMPANY.mobile}\n` +
+    `\n` +
+    body +
+    `\n\n` +
+    `Thank you for choosing ${COMPANY.name} 🙏`
+  );
+}
+
 export default function Home() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -63,6 +84,11 @@ export default function Home() {
   const [roundTrip, setRoundTrip] = useState(true);
   const [distance, setDistance] = useState<DistanceStatus>({ state: "idle" });
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+  // Quick share: staff type a total (and optional note) and send it straight
+  // out, without filling in the full trip calculator.
+  const [quickAmount, setQuickAmount] = useState("");
+  const [quickNote, setQuickNote] = useState("");
+  const [quickCopyStatus, setQuickCopyStatus] = useState<CopyStatus>("idle");
   // Exact GPS coordinates for the start when "Use my location" was used, so we
   // route from the real position rather than a re-geocoded address. Cleared as
   // soon as the operator edits the From field by hand.
@@ -252,16 +278,16 @@ export default function Home() {
           fare.distanceKm,
         )} (round trip)\n`
       : `Distance: ${formatKm(fare.distanceKm)} (one way)\n`;
-    return (
+    return branded(
       `Bus trip quote\n` +
-      routeLine +
-      distanceLine +
-      `Rate: ${formatRate(fare.ratePerKm)}/km\n` +
-      `Distance charge: ${formatINR(fare.distanceCost)}\n` +
-      (fare.tollAmount > 0
-        ? `Toll & extras: ${formatINR(fare.tollAmount)}\n`
-        : "") +
-      `Total fare: ${formatINR(fare.total)}`
+        routeLine +
+        distanceLine +
+        `Rate: ${formatRate(fare.ratePerKm)}/km\n` +
+        `Distance charge: ${formatINR(fare.distanceCost)}\n` +
+        (fare.tollAmount > 0
+          ? `Toll & extras: ${formatINR(fare.tollAmount)}\n`
+          : "") +
+        `*Total fare: ${formatINR(fare.total)}*`,
     );
   }
 
@@ -280,6 +306,38 @@ export default function Home() {
   // WhatsApp chat with the quote text prefilled.
   async function shareQuoteWhatsApp() {
     const text = quoteText();
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        // user dismissed the share sheet, or it failed — fall through
+      }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+  }
+
+  // --- Quick share: a typed total, branded, ready to send ---
+  const quickTotal = Number(quickAmount);
+  const hasQuickAmount = Number.isFinite(quickTotal) && quickTotal > 0;
+
+  function quickShareText() {
+    const noteLine = quickNote.trim() ? `${quickNote.trim()}\n` : "";
+    return branded(noteLine + `*Total fare: ${formatINR(quickTotal)}*`);
+  }
+
+  async function copyQuick() {
+    try {
+      await navigator.clipboard.writeText(quickShareText());
+      setQuickCopyStatus("ok");
+      setTimeout(() => setQuickCopyStatus("idle"), 2000);
+    } catch {
+      setQuickCopyStatus("error");
+    }
+  }
+
+  async function shareQuickWhatsApp() {
+    const text = quickShareText();
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
         await navigator.share({ text });
@@ -654,6 +712,75 @@ export default function Home() {
             )}
           </section>
         </div>
+
+        {/* ---- Quick share ---- */}
+        <section className="mt-6 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7 no-print">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+            Quick share
+          </h2>
+          <p className="mt-1 text-sm text-muted">
+            Already know the amount? Type the total and send it on WhatsApp —
+            no trip details needed. The message goes out under {COMPANY.name}.
+          </p>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_1.4fr] sm:items-start">
+            <Field label="Total amount" htmlFor="quick-amount" hint="the figure to send">
+              <NumberInput
+                id="quick-amount"
+                value={quickAmount}
+                onChange={setQuickAmount}
+                prefix="₹"
+                placeholder="0"
+              />
+            </Field>
+            <Field
+              label="Note"
+              htmlFor="quick-note"
+              hint="optional — e.g. route or customer name"
+            >
+              <input
+                id="quick-note"
+                type="text"
+                value={quickNote}
+                onChange={(e) => setQuickNote(e.target.value)}
+                placeholder="e.g. Jaipur → Udaipur round trip"
+                className={inputClass}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={shareQuickWhatsApp}
+              disabled={!hasQuickAmount}
+              className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1da851] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+            >
+              <WhatsAppIcon /> Share on WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={copyQuick}
+              disabled={!hasQuickAmount}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+            >
+              {quickCopyStatus === "ok" ? <CheckIcon /> : <CopyIcon />}
+              {quickCopyStatus === "ok" ? "Copied!" : "Copy"}
+            </button>
+          </div>
+
+          {quickCopyStatus === "error" && (
+            <p className="mt-3 text-xs text-[var(--danger)]">
+              Couldn&apos;t copy automatically — select the message and copy it
+              manually.
+            </p>
+          )}
+
+          {/* SR-only confirmation for the quick-copy action. */}
+          <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {quickCopyStatus === "ok" ? "Message copied to clipboard." : ""}
+          </div>
+        </section>
 
         {/* ---- Booking agreement ---- */}
         <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6 no-print">

@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Field, focusRing, inputClass } from "../ui";
-import { ArrowLeftIcon, PrintIcon, Spinner, WhatsAppIcon } from "../icons";
+import {
+  ArrowLeftIcon,
+  CheckIcon,
+  CloudUploadIcon,
+  PrintIcon,
+  Spinner,
+  WhatsAppIcon,
+} from "../icons";
 import {
   AgreementData,
   BUS_TYPES,
@@ -13,6 +20,43 @@ import {
   buildAgreement,
 } from "@/lib/agreement";
 import { HI_LABELS } from "@/lib/agreementHindi";
+
+// A unique, human-readable agreement reference, e.g. "ML-260725-4F7A".
+// Date part (YYMMDD) keeps it sortable; the random tail makes each one unique
+// so a genuine agreement can be matched against the saved Drive record.
+function makeAgreementId(): string {
+  const d = new Date();
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `ML-${yy}${mm}${dd}-${rand}`;
+}
+
+// Strip the "data:...;base64," prefix so only the raw base64 payload is sent.
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+// A blank form for a new agreement: fresh unique id and today's dates.
+function newBlank(): AgreementData {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    ...EMPTY,
+    serialNo: makeAgreementId(),
+    agreementDate: today,
+    advanceDate: today,
+  };
+}
 
 const EMPTY: AgreementData = {
   serialNo: "",
@@ -48,17 +92,23 @@ export default function AgreementPage() {
   const [lang, setLang] = useState<Lang>("hi");
   const [data, setData] = useState<AgreementData>(EMPTY);
   const [sharing, setSharing] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "notset" | "error"
+  >("idle");
+  const [savedLink, setSavedLink] = useState<string | null>(null);
   const docRef = useRef<HTMLDivElement>(null);
 
-  // Prefill today's date (client-only, avoids SSR hydration mismatch).
+  // Prefill today's date and a unique agreement id (client-only, avoids SSR
+  // hydration mismatch — Date/random must not run during server render).
   useEffect(() => {
     const today = new Date().toISOString().slice(0, 10);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only date prefill after mount
-    setData((d) =>
-      d.agreementDate || d.advanceDate
-        ? d
-        : { ...d, agreementDate: today, advanceDate: today },
-    );
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only prefill after mount
+    setData((d) => ({
+      ...d,
+      agreementDate: d.agreementDate || today,
+      advanceDate: d.advanceDate || today,
+      serialNo: d.serialNo || makeAgreementId(),
+    }));
   }, []);
 
   const set = <K extends keyof AgreementData>(k: K, v: AgreementData[K]) =>
@@ -98,6 +148,41 @@ export default function AgreementPage() {
     return digits.length >= 10 ? "91" + digits.slice(-10) : "";
   }
 
+  // Render the live agreement document to a single PDF Blob. Shared by the
+  // WhatsApp share and the "Save to Drive" record so both produce the same file.
+  async function buildPdfBlob(): Promise<Blob | null> {
+    const node = docRef.current;
+    if (!node) return null;
+    try {
+      const [htmlToImage, jspdf] = await Promise.all([
+        import("html-to-image"),
+        import("jspdf"),
+      ]);
+      const canvas = await htmlToImage.toCanvas(node, {
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+      });
+      const pdf = new jspdf.jsPDF({ unit: "pt", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pageW) / canvas.width;
+      const imgData = canvas.toDataURL("image/jpeg", 0.92);
+      let position = 0;
+      let remaining = imgH;
+      pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH);
+      remaining -= pageH;
+      while (remaining > 0) {
+        position -= pageH;
+        pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH);
+        remaining -= pageH;
+      }
+      return pdf.output("blob");
+    } catch {
+      return null; // caller falls back to a text-only path
+    }
+  }
+
   // Render the live document to a PDF and hand it to WhatsApp (native share
   // sheet where supported; otherwise download the PDF and open a WhatsApp chat
   // with a caption so staff can attach it).
@@ -105,40 +190,12 @@ export default function AgreementPage() {
     setSharing(true);
     try {
       let file: File | null = null;
-      const node = docRef.current;
-      if (node) {
-        try {
-          const [htmlToImage, jspdf] = await Promise.all([
-            import("html-to-image"),
-            import("jspdf"),
-          ]);
-          const canvas = await htmlToImage.toCanvas(node, {
-            pixelRatio: 2,
-            backgroundColor: "#ffffff",
-          });
-          const pdf = new jspdf.jsPDF({ unit: "pt", format: "a4" });
-          const pageW = pdf.internal.pageSize.getWidth();
-          const pageH = pdf.internal.pageSize.getHeight();
-          const imgH = (canvas.height * pageW) / canvas.width;
-          const imgData = canvas.toDataURL("image/jpeg", 0.92);
-          let position = 0;
-          let remaining = imgH;
-          pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH);
-          remaining -= pageH;
-          while (remaining > 0) {
-            position -= pageH;
-            pdf.addPage();
-            pdf.addImage(imgData, "JPEG", 0, position, pageW, imgH);
-            remaining -= pageH;
-          }
-          const blob = pdf.output("blob");
-          const safeName = (data.name || "mahalaxmi").replace(/\s+/g, "_");
-          file = new File([blob], `agreement-${safeName}.pdf`, {
-            type: "application/pdf",
-          });
-        } catch {
-          file = null; // fall back to text-only WhatsApp below
-        }
+      const blob = await buildPdfBlob();
+      if (blob) {
+        const safeName = (data.name || "mahalaxmi").replace(/\s+/g, "_");
+        file = new File([blob], `agreement-${safeName}.pdf`, {
+          type: "application/pdf",
+        });
       }
 
       const waUrl = `https://wa.me/${whatsappNumber()}?text=${encodeURIComponent(
@@ -174,6 +231,57 @@ export default function AgreementPage() {
       window.open(waUrl, "_blank");
     } finally {
       setSharing(false);
+    }
+  }
+
+  // Save the generated agreement PDF into the company's Google Drive record.
+  // The server route is a no-op until Drive credentials are configured, which
+  // surfaces here as the "notset" state.
+  async function saveToDrive() {
+    setSaveStatus("saving");
+    setSavedLink(null);
+    try {
+      const blob = await buildPdfBlob();
+      if (!blob) {
+        setSaveStatus("error");
+        return;
+      }
+      const pdfBase64 = await blobToBase64(blob);
+      const amount = data.finalAmount
+        ? `Rs. ${
+            Number.isFinite(Number(data.finalAmount))
+              ? Number(data.finalAmount).toLocaleString("en-IN")
+              : data.finalAmount
+          }`
+        : "";
+      const res = await fetch("/api/save-agreement", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: data.serialNo,
+          customer: data.name,
+          route: [data.pickupCity, data.dropCity].filter(Boolean).join(" -> "),
+          amount,
+          date: data.agreementDate,
+          lang,
+          pdfBase64,
+        }),
+      });
+      const out = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        skipped?: boolean;
+        webViewLink?: string | null;
+      };
+      if (out.ok) {
+        setSaveStatus("saved");
+        setSavedLink(out.webViewLink ?? null);
+      } else if (out.skipped) {
+        setSaveStatus("notset");
+      } else {
+        setSaveStatus("error");
+      }
+    } catch {
+      setSaveStatus("error");
     }
   }
 
@@ -219,6 +327,25 @@ export default function AgreementPage() {
             </button>
             <button
               type="button"
+              onClick={saveToDrive}
+              disabled={saveStatus === "saving"}
+              className={`inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary/40 disabled:opacity-60 ${focusRing}`}
+            >
+              {saveStatus === "saving" ? (
+                <Spinner />
+              ) : saveStatus === "saved" ? (
+                <CheckIcon />
+              ) : (
+                <CloudUploadIcon />
+              )}
+              {saveStatus === "saving"
+                ? "Saving…"
+                : saveStatus === "saved"
+                  ? "Saved to Drive"
+                  : "Save to Drive"}
+            </button>
+            <button
+              type="button"
               onClick={shareOnWhatsApp}
               disabled={sharing}
               className={`inline-flex items-center gap-2 rounded-lg bg-[#25D366] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1da851] disabled:opacity-60 ${focusRing}`}
@@ -227,6 +354,43 @@ export default function AgreementPage() {
               {sharing ? "Preparing…" : "Share on WhatsApp"}
             </button>
           </div>
+        </div>
+
+        {/* Save-to-Drive status line */}
+        <div
+          role="status"
+          aria-live="polite"
+          className="mt-2 text-right text-xs no-print empty:mt-0"
+        >
+          {saveStatus === "saved" && (
+            <span className="text-[var(--success-text)]">
+              Agreement saved to the company Drive record.
+              {savedLink && (
+                <>
+                  {" "}
+                  <a
+                    href={savedLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Open in Drive
+                  </a>
+                </>
+              )}
+            </span>
+          )}
+          {saveStatus === "notset" && (
+            <span className="text-muted">
+              Drive saving isn&apos;t set up yet — printing &amp; sharing still
+              work.
+            </span>
+          )}
+          {saveStatus === "error" && (
+            <span className="text-[var(--danger)]">
+              Couldn&apos;t save to Drive — please try again.
+            </span>
+          )}
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:items-start">
@@ -242,13 +406,17 @@ export default function AgreementPage() {
 
             <Group title="Booking type">
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Agreement no." htmlFor="serialNo">
+                <Field
+                  label="Agreement no."
+                  htmlFor="serialNo"
+                  hint="auto-generated · unique"
+                >
                   <input
                     id="serialNo"
                     className={inputClass}
                     value={data.serialNo}
                     onChange={(e) => set("serialNo", e.target.value)}
-                    placeholder="optional"
+                    placeholder="auto"
                   />
                 </Field>
                 <Field label="Agreement date" htmlFor="agreementDate">
@@ -440,7 +608,7 @@ export default function AgreementPage() {
 
             <button
               type="button"
-              onClick={() => setData({ ...EMPTY })}
+              onClick={() => setData(newBlank())}
               className={`mt-6 rounded text-sm font-medium text-muted underline-offset-4 hover:text-foreground hover:underline ${focusRing}`}
             >
               Clear all

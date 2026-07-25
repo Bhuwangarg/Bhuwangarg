@@ -177,3 +177,17 @@ export function PrintIcon() {
     </svg>
   );
 }
+
+export function CloudUploadIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 16V9m0 0-3 3m3-3 3 3M7 19a4 4 0 0 1-.9-7.9 5 5 0 0 1 9.6-1.6A3.5 3.5 0 0 1 17 19H7z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

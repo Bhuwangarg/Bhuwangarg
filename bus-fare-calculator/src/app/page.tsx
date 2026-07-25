@@ -21,6 +21,7 @@ import {
   PrintIcon,
   RouteIcon,
   Spinner,
+  WhatsAppIcon,
 } from "./icons";
 import Link from "next/link";
 import { HI_LABELS } from "@/lib/agreementHindi";
@@ -242,7 +243,8 @@ export default function Home() {
     setLocationError(null);
   }
 
-  async function copyQuote() {
+  // The quote as plain text, shared verbatim by Copy and WhatsApp.
+  function quoteText() {
     const routeLine =
       routePlaces.length >= 2 ? `Route: ${routePlaces.join(" → ")}\n` : "";
     const distanceLine = roundTrip
@@ -250,7 +252,7 @@ export default function Home() {
           fare.distanceKm,
         )} (round trip)\n`
       : `Distance: ${formatKm(fare.distanceKm)} (one way)\n`;
-    const text =
+    return (
       `Bus trip quote\n` +
       routeLine +
       distanceLine +
@@ -259,14 +261,34 @@ export default function Home() {
       (fare.tollAmount > 0
         ? `Toll & extras: ${formatINR(fare.tollAmount)}\n`
         : "") +
-      `Total fare: ${formatINR(fare.total)}`;
+      `Total fare: ${formatINR(fare.total)}`
+    );
+  }
+
+  async function copyQuote() {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(quoteText());
       setCopyStatus("ok");
       setTimeout(() => setCopyStatus("idle"), 2000);
     } catch {
       setCopyStatus("error");
     }
+  }
+
+  // Send the quote to a customer on WhatsApp. On mobile the native share sheet
+  // (which includes WhatsApp) is offered first; everywhere else it opens a
+  // WhatsApp chat with the quote text prefilled.
+  async function shareQuoteWhatsApp() {
+    const text = quoteText();
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ text });
+        return;
+      } catch {
+        // user dismissed the share sheet, or it failed — fall through
+      }
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
   }
 
   return (
@@ -584,12 +606,20 @@ export default function Home() {
             <div className="mt-6 flex flex-wrap gap-3 no-print">
               <button
                 type="button"
+                onClick={shareQuoteWhatsApp}
+                disabled={!hasQuote}
+                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#1da851] disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+              >
+                <WhatsAppIcon /> Share on WhatsApp
+              </button>
+              <button
+                type="button"
                 onClick={copyQuote}
                 disabled={!hasQuote}
-                className={`inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+                className={`inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
               >
                 {copyStatus === "ok" ? <CheckIcon /> : <CopyIcon />}
-                {copyStatus === "ok" ? "Copied!" : "Copy quote"}
+                {copyStatus === "ok" ? "Copied!" : "Copy"}
               </button>
               <button
                 type="button"

@@ -19,11 +19,13 @@ import {
   EMPTY_CLAIM,
   INTIMATION_REQUIRED,
   LOSS_TYPES,
+  formatDate,
   intimationText,
   makeClaimRef,
   missingFields,
 } from "@/lib/claim";
 import { FLEET, findVehicle, searchFleet } from "@/lib/fleet";
+import { coversDate, findPolicy } from "@/lib/policies";
 import { ClaimFormDoc, IntimationDoc } from "./documents";
 
 // Drafts survive an accidental refresh — staff often fill these in while on the
@@ -107,18 +109,35 @@ export default function ClaimsPage() {
     [vehicleQuery],
   );
 
-  // Choosing a bus from the fleet fills the registered owner, who is the
-  // insured party on the policy.
+  // Choosing a bus fills everything already known about it: the registered
+  // owner from the fleet list, and the whole policy schedule from the PDF held
+  // in Drive. Anything the operator has already typed by hand is preserved.
   function pickVehicle(reg: string) {
     const v = findVehicle(reg);
+    const p = findPolicy(reg);
     setVehicleQuery(reg);
     setShowSuggestions(false);
     setData((d) => ({
       ...d,
       vehicleNo: reg,
-      insuredName: v ? v.owner : d.insuredName,
+      insuredName: p?.insuredName || v?.owner || d.insuredName,
+      policyNo: d.policyNo || p?.policyNo || "",
+      policyFrom: d.policyFrom || p?.validFrom || "",
+      policyTo: d.policyTo || p?.validTo || "",
+      engineNo: d.engineNo || p?.engineNo || "",
+      chassisNo: d.chassisNo || p?.chassisNo || "",
+      idv: d.idv || p?.idv || "",
+      insuredAddress: d.insuredAddress || p?.insuredAddress || "",
+      insuredMobile: d.insuredMobile || p?.insuredMobile || "",
+      passengersCarried: d.passengersCarried || p?.seatingCapacity || "",
     }));
   }
+
+  // The policy on file for the chosen bus, and whether it covered the date of
+  // loss. A claim filed against a lapsed policy is rejected outright, so this
+  // is surfaced prominently rather than left for staff to notice.
+  const policy = data.vehicleNo ? findPolicy(data.vehicleNo) : undefined;
+  const policyCovers = policy ? coversDate(policy, data.lossDate) : null;
 
   const missingIntimation = missingFields(data, INTIMATION_REQUIRED);
   const missingClaim = missingFields(data, CLAIM_REQUIRED);
@@ -387,8 +406,13 @@ export default function ClaimsPage() {
                               <span className="font-mono font-semibold">
                                 {v.reg}
                               </span>
-                              <span className="text-xs text-muted">
+                              <span className="flex items-center gap-2 text-xs text-muted">
                                 {v.owner}
+                                {findPolicy(v.reg) && (
+                                  <span className="rounded bg-[var(--success-text)]/15 px-1.5 py-0.5 font-semibold text-[var(--success-text)]">
+                                    policy
+                                  </span>
+                                )}
                               </span>
                             </button>
                           </li>
@@ -396,6 +420,32 @@ export default function ClaimsPage() {
                       </ul>
                     )}
                   </div>
+
+                  {policy && (
+                    <div className="rounded-xl border border-[var(--success-text)]/40 bg-[var(--success-text)]/5 p-3.5">
+                      <div className="flex items-center gap-2">
+                        <CheckIcon />
+                        <span className="text-sm font-bold text-foreground">
+                          Policy found on file
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted">
+                        {policy.makeModel} &middot; {policy.seatingCapacity}{" "}
+                        seats &middot; {policy.insurer}
+                      </p>
+                      <p className="mt-1.5 text-xs text-muted">
+                        Everything below was filled from the policy document —
+                        check it against the papers before sending.
+                      </p>
+                    </div>
+                  )}
+
+                  {data.vehicleNo && !policy && (
+                    <p className="rounded-xl border border-border bg-surface-muted p-3.5 text-xs text-muted">
+                      No policy document on file for this bus — type the policy
+                      details by hand below.
+                    </p>
+                  )}
 
                   <Field
                     label="Insured name"
@@ -489,6 +539,29 @@ export default function ClaimsPage() {
                       />
                     </Field>
                   </div>
+
+                  {policy && policyCovers === false && (
+                    <div className="rounded-xl border border-[var(--danger)]/50 bg-[var(--danger)]/5 p-3.5">
+                      <p className="text-sm font-bold text-[var(--danger)]">
+                        The policy on file did not cover this date
+                      </p>
+                      <p className="mt-1 text-xs text-muted">
+                        Policy {policy.policyNo} runs{" "}
+                        {formatDate(policy.validFrom)} to{" "}
+                        {formatDate(policy.validTo)}, but the loss is dated{" "}
+                        {formatDate(data.lossDate)}. Check for a renewal — if the
+                        bus was insured under a newer policy, enter that policy
+                        number instead. Filing against a lapsed policy will be
+                        rejected.
+                      </p>
+                    </div>
+                  )}
+
+                  {policy && policyCovers === true && (
+                    <p className="text-xs font-medium text-[var(--success-text)]">
+                      Policy {policy.policyNo} was in force on this date.
+                    </p>
+                  )}
 
                   <Field label="Place of accident" htmlFor="lossPlace">
                     <input

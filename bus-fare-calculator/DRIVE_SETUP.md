@@ -40,11 +40,18 @@ staff later without exposing anything personal.
 4. **APIs & Services → OAuth consent screen** → User type **External** →
    fill in the app name and your email → **Save**. Under *Audience*, add the
    company account as a **Test user**.
-5. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
+5. **Important — then set the publishing status to "In production"**
+   (same OAuth consent screen page, *Publishing status → Publish app*).
+   While an app sits in *Testing*, Google expires its refresh tokens after
+   **7 days**, and Drive saving would silently stop working a week after setup.
+   Publishing avoids that. The only scope used here is `drive.file`, which
+   grants access solely to files this app itself creates — it is not a
+   "sensitive" scope, so publishing does not require Google's review process.
+6. **APIs & Services → Credentials → Create credentials → OAuth client ID** →
    Application type **Web application**.
-6. Under *Authorised redirect URIs* add exactly:
+7. Under *Authorised redirect URIs* add exactly:
    `https://developers.google.com/oauthplayground`
-7. **Create**. Copy the **Client ID** (`GOOGLE_CLIENT_ID`) and
+8. **Create**. Copy the **Client ID** (`GOOGLE_CLIENT_ID`) and
    **Client secret** (`GOOGLE_CLIENT_SECRET`).
 
 ### 3. Get the refresh token

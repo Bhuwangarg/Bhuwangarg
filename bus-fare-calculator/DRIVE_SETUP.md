@@ -10,13 +10,16 @@ Until the four settings below are configured, the **Save to Drive** button
 simply reports "Drive saving isn't set up yet" and printing/sharing continue to
 work normally. Nothing breaks.
 
-## Recommended account
+## Which account
 
-Create a **separate free Gmail account for the business**, e.g.
-`mahalaxmitravels.records@gmail.com`, rather than using a personal account.
-Company records stay separate from personal files, the free 15 GB of Drive
-storage holds many thousands of agreement PDFs, and access can be handed to
-staff later without exposing anything personal.
+Set up as the operator's own Google account (`bhuwan.garg1@gmail.com`). Do every
+step below signed in as that account — the folder, the Cloud project and the
+token must all belong to the same one.
+
+The app asks for a single permission, `drive.file`, which reaches **only the
+files this app itself creates**. It cannot read, list or alter anything else in
+the account's Drive, so pointing it at a personal account does not expose the
+rest of that Drive.
 
 > The app signs in as this account using a stored refresh token. A Google
 > "service account" is deliberately *not* used here: service accounts have no
@@ -26,7 +29,7 @@ staff later without exposing anything personal.
 
 ### 1. Make the Drive folder
 
-1. Sign in to Google Drive as the company account.
+1. Sign in to Google Drive as your own account.
 2. Create a folder, e.g. **Mahalaxmi Agreements**.
 3. Open it. The URL ends with the folder id:
    `https://drive.google.com/drive/folders/`**`1AbCdEf...`** — copy that id.
@@ -34,12 +37,12 @@ staff later without exposing anything personal.
 
 ### 2. Create the OAuth client
 
-1. Go to <https://console.cloud.google.com/> (signed in as the company account).
+1. Go to <https://console.cloud.google.com/> (signed in as your Google account).
 2. Create a new project, e.g. *Mahalaxmi Agreements*.
 3. **APIs & Services → Library** → search **Google Drive API** → **Enable**.
 4. **APIs & Services → OAuth consent screen** → User type **External** →
    fill in the app name and your email → **Save**. Under *Audience*, add the
-   company account as a **Test user**.
+   your own account as a **Test user**.
 5. **Important — then set the publishing status to "In production"**
    (same OAuth consent screen page, *Publishing status → Publish app*).
    While an app sits in *Testing*, Google expires its refresh tokens after
@@ -61,7 +64,7 @@ staff later without exposing anything personal.
    paste the Client ID and Client secret.
 3. In the left list, scroll to **Drive API v3** and select the scope:
    `https://www.googleapis.com/auth/drive.file`
-4. Click **Authorise APIs** → sign in as the company account → **Allow**.
+4. Click **Authorise APIs** → sign in as your own account → **Allow**.
    (If a "Google hasn't verified this app" warning appears, choose
    *Advanced → Go to … (unsafe)*. It is your own app.)
 5. Click **Exchange authorisation code for tokens**.

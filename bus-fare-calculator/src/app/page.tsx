@@ -20,6 +20,7 @@ import {
   PlusIcon,
   PrintIcon,
   RouteIcon,
+  ShieldIcon,
   Spinner,
   WhatsAppIcon,
 } from "./icons";
@@ -809,6 +810,25 @@ export default function Home() {
             className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover ${focusRing}`}
           >
             <FileTextIcon /> Generate agreement
+          </Link>
+        </div>
+
+        {/* ---- Insurance claim ---- */}
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-6 no-print">
+          <div>
+            <h2 className="text-base font-semibold text-foreground">
+              Insurance claim &amp; intimation
+            </h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Bus had an accident? Answer a few questions and the intimation
+              letter and claim form fill themselves in.
+            </p>
+          </div>
+          <Link
+            href="/claims"
+            className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-primary-hover ${focusRing}`}
+          >
+            <ShieldIcon /> Start a claim
           </Link>
         </div>
 

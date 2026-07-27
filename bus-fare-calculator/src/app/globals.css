@@ -81,4 +81,23 @@ input[type="number"] {
     padding: 0 !important;
     font-size: 12px !important;
   }
+  /* Same treatment for the insurance intimation / claim form. */
+  .claim-doc {
+    box-shadow: none !important;
+    border: none !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    font-size: 11px !important;
+  }
+}
+
+/* The insurance documents are always black-on-white paper, even when the app
+   itself is in dark mode — they are printed and handed to an insurer. The
+   colour-adjust keeps the section bars and table headers filled rather than
+   being stripped out by the browser's "background graphics off" default. */
+.claim-doc {
+  color: #111;
+  background: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }

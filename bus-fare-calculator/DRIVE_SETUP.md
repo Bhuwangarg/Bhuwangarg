@@ -41,7 +41,7 @@ rest of that Drive.
 2. Create a new project, e.g. *Mahalaxmi Agreements*.
 3. **APIs & Services → Library** → search **Google Drive API** → **Enable**.
 4. **APIs & Services → OAuth consent screen** → User type **External** →
-   fill in the app name and your email → **Save**. Under *Audience*, add the
+   fill in the app name and your email → **Save**. Under *Audience*, add
    your own account as a **Test user**.
 5. **Important — then set the publishing status to "In production"**
    (same OAuth consent screen page, *Publishing status → Publish app*).

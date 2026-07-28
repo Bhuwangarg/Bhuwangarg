@@ -59,9 +59,16 @@ rest of that Drive.
 
 ### 3. Get the refresh token
 
+> Do this **after** publishing the app (step 2.5). A refresh token minted while
+> the app is still in *Testing* is revoked when the app is later published, and
+> the server then fails with `invalid_grant: Token has been expired or revoked`.
+
 1. Open <https://developers.google.com/oauthplayground>.
 2. Click the ⚙️ gear (top right) → tick **Use your own OAuth credentials** →
    paste the Client ID and Client secret.
+   **This tick matters.** Without it the Playground issues the token against
+   Google's own client rather than yours, and the exchange later fails with
+   `invalid_grant` even though every value looks correct.
 3. In the left list, scroll to **Drive API v3** and select the scope:
    `https://www.googleapis.com/auth/drive.file`
 4. Click **Authorise APIs** → sign in as your own account → **Allow**.

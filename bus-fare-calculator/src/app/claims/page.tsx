@@ -65,6 +65,22 @@ export default function ClaimsPage() {
     "idle" | "saving" | "saved" | "notset" | "error"
   >("idle");
   const [savedLink, setSavedLink] = useState<string | null>(null);
+  // Roman-to-Hindi typing for the accident description. On by default, and
+  // switchable off for staff who have a Devanagari keyboard or want to paste.
+  const [autoHindi, setAutoHindi] = useState(true);
+  const [converting, setConverting] = useState(false);
+  const [convertFailed, setConvertFailed] = useState(false);
+  // Tracks whether the operator typed English prose, judged on the raw input
+  // before transliteration rewrites it into Devanagari. Markers must be
+  // accumulated across keystrokes: each word is converted as soon as it is
+  // finished, so the field never holds two English words at the same moment.
+  const [wroteEnglish, setWroteEnglish] = useState(false);
+  const englishSeen = useRef<Set<string>>(new Set());
+  // Conversions are network calls and can overlap: typing "The bus " fires one
+  // request for "The" and another for "The bus". If the older reply lands last
+  // it splices its words into text it was not computed from and mangles the
+  // sentence. Only the most recently issued conversion may apply.
+  const convertSeq = useRef(0);
   const docRef = useRef<HTMLDivElement>(null);
 
   const step = STEPS[stepIndex];
@@ -138,6 +154,76 @@ export default function ClaimsPage() {
   // is surfaced prominently rather than left for staff to notice.
   const policy = data.vehicleNo ? findPolicy(data.vehicleNo) : undefined;
   const policyCovers = policy ? coversDate(policy, data.lossDate) : null;
+
+  // Convert the Roman words the operator has finished typing into Devanagari,
+  // leaving the word still under the cursor alone so typing is never disturbed
+  // mid-word. Words already in Devanagari, numbers and punctuation pass
+  // through untouched, so this is safe to run on every keystroke.
+  async function hindifyDescription(raw: string, full = false) {
+    // While typing, the trailing word is still being composed and must be left
+    // alone. When the operator asks explicitly ("Convert now"), convert it too.
+    const m = full
+      ? ([raw, raw, ""] as const)
+      : raw.match(/^([\s\S]*?)([A-Za-z']*)$/);
+    if (!m) return;
+    const [, settled, pending] = m;
+
+    // Only the Roman runs need converting.
+    const romanRuns = settled.match(/[A-Za-z']+/g);
+    if (!romanRuns || romanRuns.length === 0) return;
+
+    const seq = ++convertSeq.current;
+    setConverting(true);
+    try {
+      const res = await fetch(
+        `/api/transliterate?text=${encodeURIComponent(romanRuns.join(" "))}`,
+      );
+      // Superseded while in flight — a later keystroke already issued a
+      // conversion covering this text, so applying ours would corrupt it.
+      if (seq !== convertSeq.current) return;
+      if (!res.ok) {
+        setConvertFailed(true);
+        return;
+      }
+      const out = (await res.json()) as { text?: string };
+      if (seq !== convertSeq.current) return;
+      const words = (out.text ?? "").split(/\s+/).filter(Boolean);
+      if (words.length !== romanRuns.length) {
+        // Word counts drifted — splicing would scramble the sentence, so
+        // leave the text exactly as typed rather than corrupt it.
+        setConvertFailed(true);
+        return;
+      }
+      let i = 0;
+      const converted = settled.replace(/[A-Za-z']+/g, () => words[i++]);
+      setConvertFailed(false);
+      setData((d) => ({ ...d, description: converted + pending }));
+    } catch {
+      if (seq === convertSeq.current) setConvertFailed(true);
+    } finally {
+      if (seq === convertSeq.current) setConverting(false);
+    }
+  }
+
+  // Fires when a word is completed (space, newline or punctuation), matching
+  // how an Indic keyboard behaves.
+  function onDescriptionChange(value: string) {
+    set("description", value);
+    if (!autoHindi) return;
+    // Judge the language from what was actually typed. Once conversion has
+    // run the text is Devanagari, so checking afterwards would never catch
+    // English prose — the very thing the warning exists for.
+    if (!value.trim()) {
+      englishSeen.current.clear();
+      setWroteEnglish(false);
+    } else {
+      for (const w of englishMarkers(value)) englishSeen.current.add(w);
+      if (englishSeen.current.size >= 2) setWroteEnglish(true);
+    }
+    if (/[\s.,;!?।]$/.test(value) && /[A-Za-z]/.test(value)) {
+      void hindifyDescription(value);
+    }
+  }
 
   const missingIntimation = missingFields(data, INTIMATION_REQUIRED);
   const missingClaim = missingFields(data, CLAIM_REQUIRED);
@@ -581,22 +667,95 @@ export default function ClaimsPage() {
                   />
 
                   {/* The insurer's surveyor reads this in Hindi, so the
-                      description is always written in Devanagari. */}
-                  <Field
-                    label="दुर्घटना का विवरण — What happened"
-                    htmlFor="description"
-                    hint="हिंदी में लिखें"
-                  >
+                      description is always written in Devanagari. Staff type
+                      it in Roman letters and each finished word is converted. */}
+                  <div>
+                    <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                      <label
+                        htmlFor="description"
+                        className="text-sm font-medium text-foreground"
+                      >
+                        दुर्घटना का विवरण — What happened
+                      </label>
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-muted">
+                        <input
+                          type="checkbox"
+                          checked={autoHindi}
+                          onChange={(e) => setAutoHindi(e.target.checked)}
+                          className="h-3.5 w-3.5 rounded border-border accent-[var(--primary)]"
+                        />
+                        Type in Hindi
+                      </label>
+                    </div>
                     <textarea
                       id="description"
                       rows={3}
                       lang="hi"
                       className={`${inputClass} devanagari`}
                       value={data.description}
-                      onChange={(e) => set("description", e.target.value)}
-                      placeholder="जैसे: टोल प्लाजा पर खड़ी बस को पीछे से ट्रक ने टक्कर मारी; पिछला हिस्सा, बंपर और टेल लैंप क्षतिग्रस्त।"
+                      onChange={(e) => onDescriptionChange(e.target.value)}
+                      placeholder={
+                        autoHindi
+                          ? "Type in Roman: gaadi ko peeche se truck ne takkar mari"
+                          : "जैसे: टोल प्लाजा पर खड़ी बस को पीछे से ट्रक ने टक्कर मारी।"
+                      }
                     />
-                  </Field>
+
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                      {autoHindi ? (
+                        <span className="text-muted">
+                          Type as you speak —{" "}
+                          <span className="font-medium">gaadi kharab ho gayi</span>{" "}
+                          becomes{" "}
+                          <span className="devanagari font-medium">
+                            गाडी ख़राब हो गयी
+                          </span>
+                          . Each word converts when you press space.
+                        </span>
+                      ) : (
+                        <span className="text-muted">
+                          Auto-conversion off — type or paste Devanagari
+                          directly.
+                        </span>
+                      )}
+                      {converting && (
+                        <span className="inline-flex items-center gap-1 text-muted">
+                          <Spinner /> converting…
+                        </span>
+                      )}
+                      {autoHindi && /[A-Za-z]/.test(data.description) && (
+                        <button
+                          type="button"
+                          onClick={() => hindifyDescription(data.description, true)}
+                          className={`rounded font-medium text-primary underline-offset-2 hover:underline ${focusRing}`}
+                        >
+                          Convert now
+                        </button>
+                      )}
+                    </div>
+
+                    {convertFailed && (
+                      <p className="mt-1.5 text-xs text-[var(--danger)]">
+                        Couldn&apos;t convert just now — your text is unchanged.
+                        Try &ldquo;Convert now&rdquo;, or untick to type
+                        Devanagari yourself.
+                      </p>
+                    )}
+
+                    {/* Written in English rather than Hinglish, transliteration
+                        produces Devanagari-spelled English, which reads as
+                        nonsense to a surveyor. Warn rather than let it ship. */}
+                    {autoHindi && wroteEnglish && (
+                      <p className="mt-1.5 text-xs text-[var(--danger)]">
+                        This looks like English prose. Transliteration spells
+                        sounds, it does not translate — &ldquo;the bus was
+                        hit&rdquo; becomes &ldquo;
+                        <span className="devanagari">थे बस वास् हिट</span>
+                        &rdquo;. Write it the way you would say it in Hindi
+                        instead.
+                      </p>
+                    )}
+                  </div>
 
                   <Field
                     label="Date intimated to workshop"
@@ -1172,6 +1331,18 @@ export default function ClaimsPage() {
 }
 
 /* ---------------- helpers ---------------- */
+
+// Common English function words that have no place in a Hinglish sentence.
+// Their presence means the operator wrote English prose, which transliterates
+// into Devanagari-spelled English rather than Hindi.
+const ENGLISH_MARKERS =
+  /\b(the|was|were|is|are|been|being|of|from|with|which|that|there|their|and|but|because|while|when|his|her|its|this|these|those|have|has|had|will|would|should|could)\b/gi;
+
+/** The distinct English marker words present in a piece of text, lowercased. */
+function englishMarkers(text: string): string[] {
+  const hits = text.match(ENGLISH_MARKERS) ?? [];
+  return [...new Set(hits.map((w) => w.toLowerCase()))];
+}
 
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

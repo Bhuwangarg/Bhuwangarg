@@ -253,7 +253,12 @@ export function intimationText(d: ClaimData): string {
   const rows = buildIntimation(d)
     .map((r) => `${r.label}: ${r.value || "—"}`)
     .join("\n");
-  return `*MOTOR CLAIM INTIMATION*\nRef: ${d.refNo}\n\n${rows}`;
+  // The accident description is written in Hindi and carries the detail a
+  // surveyor actually acts on, so it goes out with the intimation too.
+  const description = d.description.trim()
+    ? `\n\n*दुर्घटना का विवरण:*\n${d.description.trim()}`
+    : "";
+  return `*MOTOR CLAIM INTIMATION*\nRef: ${d.refNo}\n\n${rows}${description}`;
 }
 
 /* ---------------- completeness ---------------- */
@@ -277,7 +282,7 @@ export const CLAIM_REQUIRED: FieldCheck[] = [
   ...INTIMATION_REQUIRED,
   { key: "insuredAddress", label: "Insured address" },
   { key: "insuredMobile", label: "Insured mobile" },
-  { key: "description", label: "Description of the accident" },
+  { key: "description", label: "दुर्घटना का विवरण (in Hindi)" },
   { key: "driverName", label: "Driver name" },
   { key: "licenseNo", label: "Driving licence number" },
 ];

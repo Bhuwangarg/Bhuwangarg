@@ -119,7 +119,10 @@ export function IntimationDoc({ data }: { data: ClaimData }) {
 
       {data.description && (
         <p className="mt-3 text-justify">
-          <strong>Brief description:</strong> {data.description}
+          <strong>दुर्घटना का विवरण / Brief description:</strong>{" "}
+          <span lang="hi" className="devanagari">
+            {data.description}
+          </span>
         </p>
       )}
 
@@ -223,7 +226,9 @@ export function ClaimFormDoc({ data }: { data: ClaimData }) {
         <div>
           Short Description of Accident/ Incident{" "}
           {data.description ? (
-            <span className="font-semibold">{data.description}</span>
+            <span lang="hi" className="devanagari font-semibold">
+              {data.description}
+            </span>
           ) : (
             blank("", "18rem")
           )}

@@ -580,18 +580,21 @@ export default function ClaimsPage() {
                     onChange={(v) => set("lossType", v)}
                   />
 
+                  {/* The insurer's surveyor reads this in Hindi, so the
+                      description is always written in Devanagari. */}
                   <Field
-                    label="What happened"
+                    label="दुर्घटना का विवरण — What happened"
                     htmlFor="description"
-                    hint="short description for the form"
+                    hint="हिंदी में लिखें"
                   >
                     <textarea
                       id="description"
                       rows={3}
-                      className={inputClass}
+                      lang="hi"
+                      className={`${inputClass} devanagari`}
                       value={data.description}
                       onChange={(e) => set("description", e.target.value)}
-                      placeholder="e.g. Bus was hit from behind by a truck while stationary at a toll plaza; rear body and bumper damaged."
+                      placeholder="जैसे: टोल प्लाजा पर खड़ी बस को पीछे से ट्रक ने टक्कर मारी; पिछला हिस्सा, बंपर और टेल लैंप क्षतिग्रस्त।"
                     />
                   </Field>
 

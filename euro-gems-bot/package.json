@@ -1,0 +1,13 @@
+{
+  "name": "euro-gems-whatsapp-bot",
+  "version": "1.0.0",
+  "description": "Bilingual (EN/IT) WhatsApp auto-reply bot for Euro Gems — runs standalone on the WhatsApp Cloud API or ports into zappie.",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node src/server.js",
+    "sim": "node src/sim.js",
+    "test": "node --test"
+  }
+}
